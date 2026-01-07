@@ -1,6 +1,7 @@
 import base64
 import io
 import uuid
+from pathlib import Path
 from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -29,8 +30,10 @@ CORS(app)
 # Initialize database schema if missing
 Base.metadata.create_all(bind=engine)
 
+BASE_QR_DIR = Path(__file__).resolve().parent / "qrcodes"
 
-def generate_qr_base64(data: str) -> str:
+
+def generate_qr_base64(data: str, category: str = "misc", filename: str | None = None) -> str:
     import qrcode
     from qrcode.image.pil import PilImage
 
@@ -41,6 +44,13 @@ def generate_qr_base64(data: str) -> str:
     img: PilImage = qr.make_image(image_factory=PilImage, fill_color="black", back_color="white")
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
+
+    # persist to categorized folder for printing/archival
+    save_dir = BASE_QR_DIR / category
+    save_dir.mkdir(parents=True, exist_ok=True)
+    file_name = filename or f"{data}.png"
+    (save_dir / file_name).write_bytes(buffer.getvalue())
+
     return base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
@@ -125,7 +135,7 @@ def create_personnel():
         session.add(person)
         session.commit()
         session.refresh(person)
-        qr_image = generate_qr_base64(person.qr_token)
+        qr_image = generate_qr_base64(person.qr_token, category="personnel", filename=f"person_{person.id}.png")
         return jsonify({"personnel": personnel_to_dict(person), "qr_image_base64": qr_image})
 
 
@@ -338,7 +348,7 @@ def create_material():
         session.add(material)
         session.commit()
         session.refresh(material)
-        qr_image = generate_qr_base64(token)
+        qr_image = generate_qr_base64(token, category="materials", filename=f"material_{material.id}.png")
         return jsonify({"material": material_to_dict(material), "qr_image_base64": qr_image})
 
 
@@ -379,7 +389,7 @@ def create_product():
         session.add(product)
         session.commit()
         session.refresh(product)
-        qr_image = generate_qr_base64(token)
+        qr_image = generate_qr_base64(token, category="products", filename=f"product_{product.id}.png")
         return jsonify({"product": product_to_dict(product), "qr_image_base64": qr_image})
 
 
@@ -417,7 +427,7 @@ def create_work_order():
         session.add(wo)
         session.commit()
         session.refresh(wo)
-        qr_image = generate_qr_base64(token)
+        qr_image = generate_qr_base64(token, category="work_orders", filename=f"wo_{wo.id}.png")
         return jsonify({"work_order": work_order_to_dict(wo), "qr_image_base64": qr_image})
 
 
@@ -484,6 +494,8 @@ def add_work_order_progress(work_order_id: int):
             wo.status = "完成"
             if not wo.completion_qr_token:
                 wo.completion_qr_token = new_token()
+                # generate and persist completion QR
+                generate_qr_base64(wo.completion_qr_token, category="work_order_completion", filename=f"wo_{wo.id}_completion.png")
 
         session.commit()
         session.refresh(prog)
@@ -607,7 +619,7 @@ def create_inspection():
             session.add(record)
             session.commit()
             session.refresh(record)
-            qr_image = generate_qr_base64(material.qr_token)
+            qr_image = generate_qr_base64(material.qr_token, category="materials", filename=f"material_{material.id}.png")
             response = {
                 "inspection": inspection_to_dict(record),
                 "material": material_to_dict(material),
@@ -664,7 +676,7 @@ def create_inspection():
         session.commit()
         session.refresh(record)
         session.refresh(move)
-        qr_image = generate_qr_base64(product.qr_token)
+        qr_image = generate_qr_base64(product.qr_token, category="products", filename=f"product_{product.id}.png")
         return jsonify(
             {
                 "inspection": inspection_to_dict(record),
