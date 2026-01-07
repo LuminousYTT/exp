@@ -9,55 +9,7 @@
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
 	<style>
-		:root {
-			--bg: #0f172a;
-			--card: #111827;
-			--accent: #1d4ed8;
-			--muted: #94a3b8;
-			--border: #1f2937;
-			--text: #e2e8f0;
-		}
-
-		* {
-			box-sizing: border-box;
-		}
-
-		body {
-			margin: 0;
-			font-family: 'Manrope', system-ui, -apple-system, sans-serif;
-			background: var(--bg);
-			color: var(--text);
-		}
-
-		header {
-			padding: 24px;
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-		}
-
-		h1 {
-			margin: 0;
-			font-size: 20px;
-			letter-spacing: 0.3px;
-		}
-
-		.pill {
-			background: rgba(255, 255, 255, 0.08);
-			border: 1px solid var(--border);
-			padding: 6px 10px;
-			border-radius: 999px;
-			color: var(--muted);
-			font-size: 12px;
-		}
-
-		main {
-			padding: 0 24px 24px;
-			max-width: 1200px;
-			margin: 0 auto;
-		}
-
-		.grid {
+		<div class="card"><h2>物料质检+入库</h2><form id="material-inspection-form"><div class="row-col"><div><label>物料ID(已有可填)</label><input name="material_id" type="number" placeholder="已有物料ID" /></div><div><label>数量</label><input name="qty" type="number" placeholder="入库数量" /></div></div><div class="row-col"><div><label>名称(新物料必填)</label><input name="name" /></div><div><label>批次(新物料必填)</label><input name="batch_code" /></div><div><label>供应商(新物料必填)</label><input name="supplier" /></div></div><label>入库位置</label><input name="location" placeholder="货架/库位" /><label>结果</label><input name="result" value="合格" required /><label>检验人</label><input name="inspector" /><label>备注</label><textarea name="note" placeholder="检验项目、缺陷记录等"></textarea><button type="submit">提交质检并入库</button></form><div class="list" id="material-qr" style="text-align:center;">物料二维码将在提交后生成</div><div class="list" id="inspection-list"></div></div><div class="card"><h2>成品质检入库 (需扫描工单二维码)</h2><form id="product-inspection-form"><label>工单二维码Token</label><input name="work_order_token" id="wo-token" placeholder="请扫码工单二维码自动填充" required /><div class="row-col"><div><label>数量</label><input name="qty" type="number" placeholder="入库数量" required /></div><div><label>库位</label><input name="location" placeholder="FG库位" /></div></div><label>结果</label><input name="result" value="合格" required /><label>检验人</label><input name="inspector" /><label>备注</label><textarea name="note" placeholder="检验项目、缺陷记录等"></textarea><button type="submit">提交质检并入库</button></form><div class="list" id="product-qr" style="text-align:center;">成品二维码将在提交后生成</div></div><div class="card" style="grid-column: 1 / -1;"><h2>质量追溯（扫描成品二维码）</h2><div class="row-col"><div><label>成品二维码Token</label><input id="trace-token" placeholder="可扫码自动填入" /></div><div><button id="trace-btn" type="button">查询追溯</button></div></div><pre class="list" id="trace-result">等待扫描或查询...</pre></div>.grid {
 			display: grid;
 			gap: 16px;
 			grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
