@@ -21,7 +21,6 @@ from models import (
     InspectionRecord,
     MaterialReceipt,
     ProductInventoryMove,
-    StocktakeRecord,
 )
 
 app = Flask(__name__)
@@ -263,18 +262,6 @@ def product_move_to_dict(m: ProductInventoryMove):
         "customer": m.customer,
         "note": m.note,
         "created_at": m.created_at.isoformat(),
-    }
-
-
-def stocktake_to_dict(s: StocktakeRecord):
-    return {
-        "id": s.id,
-        "item_type": s.item_type,
-        "item_id": s.item_id,
-        "real_qty": s.real_qty,
-        "delta": s.delta,
-        "note": s.note,
-        "created_at": s.created_at.isoformat(),
     }
 
 
@@ -622,108 +609,6 @@ def list_inspections():
         items = session.scalars(select(InspectionRecord).order_by(InspectionRecord.created_at.desc())).all()
         return jsonify([inspection_to_dict(i) for i in items])
 
-
-# ---- 库存管理 ----
-
-
-@app.post("/api/inventory/material-in")
-def material_in():
-    payload = request.json or {}
-    required = ["material_id", "qty"]
-    if not all(k in payload for k in required):
-        return jsonify({"error": "Missing required fields"}), 400
-    qty = int(payload.get("qty", 0))
-    with SessionLocal() as session:
-        material = session.get(Material, payload["material_id"])
-        if not material:
-            return jsonify({"error": "Material not found"}), 404
-        material.stock_qty = (material.stock_qty or 0) + qty
-        receipt = MaterialReceipt(
-            material_id=material.id,
-            location=payload.get("location"),
-            qty=qty,
-            operator=payload.get("operator"),
-        )
-        session.add(receipt)
-        session.commit()
-        return jsonify({"material": material_to_dict(material), "receipt": receipt_to_dict(receipt)})
-
-
-@app.post("/api/inventory/material-out")
-def material_out():
-    payload = request.json or {}
-    required = ["material_id", "qty"]
-    if not all(k in payload for k in required):
-        return jsonify({"error": "Missing required fields"}), 400
-    qty = int(payload.get("qty", 0))
-    with SessionLocal() as session:
-        material = session.get(Material, payload["material_id"])
-        if not material:
-            return jsonify({"error": "Material not found"}), 404
-        material.stock_qty = (material.stock_qty or 0) - qty
-        receipt = MaterialReceipt(
-            material_id=material.id,
-            location=payload.get("location"),
-            qty=-qty,
-            operator=payload.get("operator"),
-        )
-        session.add(receipt)
-        session.commit()
-        return jsonify({"material": material_to_dict(material), "receipt": receipt_to_dict(receipt)})
-
-
-@app.post("/api/inventory/product-move")
-def product_move():
-    payload = request.json or {}
-    required = ["direction", "qty", "product_name"]
-    if not all(k in payload for k in required):
-        return jsonify({"error": "Missing required fields"}), 400
-    move = ProductInventoryMove(
-        product_id=payload.get("product_id"),
-        product_name=payload["product_name"],
-        direction=payload["direction"],
-        qty=int(payload.get("qty", 0)),
-        location=payload.get("location"),
-        order_code=payload.get("order_code"),
-        customer=payload.get("customer"),
-        note=payload.get("note"),
-    )
-    with SessionLocal() as session:
-        session.add(move)
-        session.commit()
-        session.refresh(move)
-        return jsonify(product_move_to_dict(move))
-
-
-@app.post("/api/stocktake")
-def stocktake():
-    payload = request.json or {}
-    required = ["item_type", "item_id", "real_qty"]
-    if not all(k in payload for k in required):
-        return jsonify({"error": "Missing required fields"}), 400
-    item_type = payload["item_type"]
-    item_id = int(payload["item_id"])
-    real_qty = int(payload["real_qty"])
-    note = payload.get("note")
-    delta = 0
-
-    with SessionLocal() as session:
-        if item_type == "material":
-            material = session.get(Material, item_id)
-            if not material:
-                return jsonify({"error": "Material not found"}), 404
-            delta = real_qty - (material.stock_qty or 0)
-            material.stock_qty = real_qty
-        record = StocktakeRecord(
-            item_type=item_type,
-            item_id=item_id,
-            real_qty=real_qty,
-            delta=delta,
-            note=note,
-        )
-        session.add(record)
-        session.commit()
-        return jsonify(stocktake_to_dict(record))
 
 
 @app.get("/api/scan/<string:qr_token>")

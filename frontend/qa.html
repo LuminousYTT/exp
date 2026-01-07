@@ -178,28 +178,6 @@
 			</div>
 
 			<div class="card">
-				<h2>物料入库 / 出库</h2>
-				<form id="material-in-form">
-					<label>入库 (物料ID, 数量, 位置)</label>
-					<div class="row-col">
-						<div><input name="material_id" type="number" placeholder="物料ID" required /></div>
-						<div><input name="qty" type="number" placeholder="数量" required /></div>
-						<div><input name="location" placeholder="货架" /></div>
-					</div>
-					<button type="submit">入库</button>
-				</form>
-				<form id="material-out-form">
-					<label>出库 (物料ID, 数量, 位置)</label>
-					<div class="row-col">
-						<div><input name="material_id" type="number" placeholder="物料ID" required /></div>
-						<div><input name="qty" type="number" placeholder="数量" required /></div>
-						<div><input name="location" placeholder="货架" /></div>
-					</div>
-					<button type="submit">出库</button>
-				</form>
-			</div>
-
-			<div class="card">
 				<h2>成品质检入库 (需扫描工单二维码)</h2>
 				<form id="product-inspection-form">
 					<label>工单二维码Token</label>
@@ -213,35 +191,7 @@
 					<label>备注</label><textarea name="note" placeholder="检验项目、缺陷记录等"></textarea>
 					<button type="submit">提交质检并入库</button>
 				</form>
-
-				<h2>成品出/入库 & 盘点</h2>
-				<form id="product-move-form">
-					<label>成品出/入库 (方向 in/out)</label>
-					<div class="row-col">
-						<div><input name="product_name" placeholder="成品名称" required /></div>
-						<div><input name="direction" placeholder="in/out" required /></div>
-						<div><input name="qty" type="number" placeholder="数量" required /></div>
-					</div>
-					<label>客户/订单/位置</label>
-					<div class="row-col">
-						<div><input name="customer" placeholder="客户" /></div>
-						<div><input name="order_code" placeholder="订单号" /></div>
-						<div><input name="location" placeholder="库位" /></div>
-					</div>
-					<button type="submit">提交成品出入</button>
-				</form>
-				<form id="stocktake-form">
-					<label>盘点 (material/product)</label>
-					<div class="row-col">
-						<div><input name="item_type" placeholder="material" required /></div>
-						<div><input name="item_id" type="number" placeholder="ID" required /></div>
-						<div><input name="real_qty" type="number" placeholder="盘点数量" required /></div>
-					</div>
-					<label>备注</label><input name="note" />
-					<button type="submit">提交盘点</button>
-				</form>
 			</div>
-		</div>
 	</main>
 
 	<script>
@@ -308,41 +258,6 @@
 				await postJSON(`${API_BASE}/inspections`, data);
 				alert("成品质检/入库已提交");
 				await refreshAll();
-			});
-
-			document.getElementById("material-in-form").addEventListener("submit", async (e) => {
-				e.preventDefault();
-				const data = Object.fromEntries(new FormData(e.target).entries());
-				data.material_id = Number(data.material_id);
-				data.qty = Number(data.qty);
-				await postJSON(`${API_BASE}/inventory/material-in`, data);
-				alert("入库成功");
-			});
-
-			document.getElementById("material-out-form").addEventListener("submit", async (e) => {
-				e.preventDefault();
-				const data = Object.fromEntries(new FormData(e.target).entries());
-				data.material_id = Number(data.material_id);
-				data.qty = Number(data.qty);
-				await postJSON(`${API_BASE}/inventory/material-out`, data);
-				alert("出库成功");
-			});
-
-			document.getElementById("product-move-form").addEventListener("submit", async (e) => {
-				e.preventDefault();
-				const data = Object.fromEntries(new FormData(e.target).entries());
-				data.qty = Number(data.qty || 0);
-				await postJSON(`${API_BASE}/inventory/product-move`, data);
-				alert("已提交");
-			});
-
-			document.getElementById("stocktake-form").addEventListener("submit", async (e) => {
-				e.preventDefault();
-				const data = Object.fromEntries(new FormData(e.target).entries());
-				data.item_id = Number(data.item_id);
-				data.real_qty = Number(data.real_qty);
-				await postJSON(`${API_BASE}/stocktake`, data);
-				alert("盘点完成");
 			});
 		}
 
