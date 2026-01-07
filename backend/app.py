@@ -802,7 +802,7 @@ def trace_product(qr_token: str):
         )
 
 
-
+@app.route('/') 
 @app.get("/api/scan/<string:qr_token>")
 def scan_token(qr_token: str):
     with SessionLocal() as session:
@@ -828,4 +828,5 @@ def health():
 
 
 if __name__ == "__main__":
-    app.run(host=config.HOST, port=config.PORT, debug=config.DEBUG)
+    app.run(host=config.HOST, port=config.PORT, debug=config.DEBUG, ssl_context=('D:\Vscode\code\exp\\backend\cert.pem', 'D:\Vscode\code\exp\\backend\key.pem'))
+
