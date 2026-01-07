@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="zh">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>电子组装车间 MES Demo</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+	<style>
+		:root {
+			--bg: #0f172a;
+			--card: #111827;
+			--accent: #1d4ed8;
+			--muted: #94a3b8;
+			--border: #1f2937;
+			--text: #e2e8f0;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+			background: radial-gradient(circle at 20% 20%, rgba(29, 78, 216, 0.12), transparent 40%), radial-gradient(circle at 80% 0%, rgba(16, 185, 129, 0.16), transparent 35%), var(--bg);
+			color: var(--text);
+		}
+
+		header {
+			padding: 24px;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+		}
+
+		h1 {
+			margin: 0;
+			font-size: 20px;
+			letter-spacing: 0.3px;
+		}
+
+		.pill {
+			background: rgba(255, 255, 255, 0.08);
+			border: 1px solid var(--border);
+			padding: 6px 10px;
+			border-radius: 999px;
+			color: var(--muted);
+			font-size: 12px;
+		}
+
+		main {
+			padding: 0 24px 24px;
+			max-width: 1200px;
+			margin: 0 auto;
+		}
+
+		.grid {
+			display: grid;
+			gap: 16px;
+			grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+		}
+
+		.card {
+			background: var(--card);
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			padding: 16px;
+			box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+		}
+
+		.card h2 {
+			margin-top: 0;
+			font-size: 16px;
+			letter-spacing: 0.2px;
+		}
+
+		label {
+			display: block;
+			margin: 10px 0 4px;
+			font-size: 13px;
+			color: var(--muted);
+		}
+
+		input,
+		textarea,
+		select {
+			width: 100%;
+			padding: 10px 12px;
+			border-radius: 10px;
+			border: 1px solid var(--border);
+			background: rgba(255, 255, 255, 0.04);
+			color: var(--text);
+			font-size: 14px;
+		}
+
+		textarea {
+			min-height: 80px;
+		}
+
+		button {
+			margin-top: 12px;
+			width: 100%;
+			background: linear-gradient(120deg, #2563eb, #22d3ee);
+			color: white;
+			border: none;
+			padding: 12px;
+			border-radius: 12px;
+			font-weight: 700;
+			cursor: pointer;
+			transition: transform .15s ease, box-shadow .15s ease;
+		}
+
+		button:hover {
+			transform: translateY(-1px);
+			box-shadow: 0 10px 30px rgba(34, 211, 238, 0.25);
+		}
+
+		.qr-img {
+			margin-top: 10px;
+			width: 120px;
+			height: 120px;
+			border: 1px dashed var(--border);
+			border-radius: 12px;
+			display: grid;
+			place-items: center;
+			background: rgba(255, 255, 255, 0.02);
+		}
+
+		.list {
+			margin-top: 12px;
+			max-height: 220px;
+			overflow: auto;
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			padding: 10px;
+			background: rgba(255, 255, 255, 0.02);
+		}
+
+		.row {
+			display: flex;
+			justify-content: space-between;
+			gap: 8px;
+			padding: 8px 10px;
+			border-bottom: 1px solid var(--border);
+			font-size: 13px;
+		}
+
+		.row:last-child {
+			border-bottom: none;
+		}
+
+		.badge {
+			padding: 4px 8px;
+			border-radius: 999px;
+			font-size: 11px;
+			color: #dbeafe;
+			background: rgba(37, 99, 235, 0.16);
+			border: 1px solid rgba(37, 99, 235, 0.35);
+		}
+
+		#qr-reader {
+			width: 100%;
+			min-height: 240px;
+		}
+
+		.muted {
+			color: var(--muted);
+			font-size: 13px;
+		}
+
+		@media (max-width: 640px) {
+			header {
+				flex-direction: column;
+				align-items: flex-start;
+				gap: 8px;
+			}
+		}
+	</style>
+	<script src="https://unpkg.com/html5-qrcode" defer></script>
+</head>
+
+<body>
+	<header>
+		<div>
+			<h1>电子组装车间 MES Demo</h1>
+			<div class="muted">原材料 / 人员 / 成品 管控 + 扫码追溯</div>
+		</div>
+		<div class="pill">前端: HTML+JS+CSS · 后端: Python Flask · DB: MySQL</div>
+	</header>
+	<main>
+		<div class="grid">
+			<div class="card">
+				<h2>原材料入库</h2>
+				<form id="material-form">
+					<label>名称</label><input name="name" required />
+					<label>批次号</label><input name="batch_code" required />
+					<label>供应商</label><input name="supplier" required />
+					<label>入厂检验结果</label><input name="inspection_result" placeholder="合格/不合格" required />
+					<label>库存数量</label><input name="stock_qty" type="number" min="0" value="0" />
+					<label>其他备注</label><textarea name="extra" placeholder="可记录供应商资质、检测单号等"></textarea>
+					<button type="submit">生成二维码并保存</button>
+				</form>
+				<div class="qr-img" id="material-qr">等待生成</div>
+				<div class="list" id="material-list"></div>
+			</div>
+
+			<div class="card">
+				<h2>人员建档</h2>
+				<form id="personnel-form">
+					<label>姓名</label><input name="name" required />
+					<label>工号</label><input name="employee_id" required />
+					<label>岗位/角色</label><input name="role" required />
+					<label>作业权限</label><textarea name="allowed_operations" placeholder="示例: SMT上料, 焊接, 质检"></textarea>
+					<button type="submit">生成二维码并保存</button>
+				</form>
+				<div class="qr-img" id="personnel-qr">等待生成</div>
+				<div class="list" id="personnel-list"></div>
+			</div>
+
+			<div class="card">
+				<h2>成品入库 / 追溯码</h2>
+				<form id="product-form">
+					<label>产品名称</label><input name="name" required />
+					<label>状态</label>
+					<select name="status">
+						<option value="合格">合格</option>
+						<option value="待复检">待复检</option>
+						<option value="WIP">WIP</option>
+					</select>
+					<label>最终质检结果</label><input name="final_inspection" placeholder="外观OK/功能OK" />
+					<label>关联原材料/工序</label><textarea name="linked_materials" placeholder="可写入材料批次、加工工序、设备编号"></textarea>
+					<label>过程数据</label><textarea name="process_data" placeholder="如焊接温度曲线、AOI缺陷截图链接"></textarea>
+					<button type="submit">生成二维码并保存</button>
+				</form>
+				<div class="qr-img" id="product-qr">等待生成</div>
+				<div class="list" id="product-list"></div>
+			</div>
+
+			<div class="card" style="grid-column: 1 / -1;">
+				<h2>扫码校验</h2>
+				<div class="muted">使用摄像头扫码，系统自动识别并回传对应的物料/人员/成品信息。</div>
+				<div id="qr-reader"></div>
+				<pre id="scan-result" class="list" style="white-space: pre-wrap; min-height: 120px;">等待扫码...</pre>
+			</div>
+		</div>
+	</main>
+
+	<script>
+		const API_BASE = "http://localhost:5000/api"; // 如部署到服务器请修改
+
+		async function postJSON(url, data) {
+			const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+			if (!resp.ok) { throw new Error(await resp.text()); }
+			return resp.json();
+		}
+
+		function renderList(targetId, items, mapper) {
+			const box = document.getElementById(targetId);
+			box.innerHTML = items.map(mapper).join("");
+		}
+
+		async function refreshAll() {
+			const [materials, personnel, products] = await Promise.all([
+				fetch(`${API_BASE}/materials`).then(r => r.json()),
+				fetch(`${API_BASE}/personnel`).then(r => r.json()),
+				fetch(`${API_BASE}/products`).then(r => r.json()),
+			]);
+			renderList("material-list", materials, m => `<div class="row"><div>${m.name} · 批次 ${m.batch_code}</div><div class="badge">${m.inspection_result}</div></div>`);
+			renderList("personnel-list", personnel, p => `<div class="row"><div>${p.name} (${p.employee_id})</div><div class="badge">${p.role}</div></div>`);
+			renderList("product-list", products, p => `<div class="row"><div>${p.name}</div><div class="badge">${p.status}</div></div>`);
+		}
+
+		async function setupForms() {
+			document.getElementById("material-form").addEventListener("submit", async (e) => {
+				e.preventDefault();
+				const data = Object.fromEntries(new FormData(e.target).entries());
+				data.stock_qty = Number(data.stock_qty || 0);
+				const res = await postJSON(`${API_BASE}/materials`, data);
+				document.getElementById("material-qr").innerHTML = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="qr" />`;
+				await refreshAll();
+			});
+
+			document.getElementById("personnel-form").addEventListener("submit", async (e) => {
+				e.preventDefault();
+				const data = Object.fromEntries(new FormData(e.target).entries());
+				const res = await postJSON(`${API_BASE}/personnel`, data);
+				document.getElementById("personnel-qr").innerHTML = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="qr" />`;
+				await refreshAll();
+			});
+
+			document.getElementById("product-form").addEventListener("submit", async (e) => {
+				e.preventDefault();
+				const data = Object.fromEntries(new FormData(e.target).entries());
+				const res = await postJSON(`${API_BASE}/products`, data);
+				document.getElementById("product-qr").innerHTML = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="qr" />`;
+				await refreshAll();
+			});
+		}
+
+		function startScanner() {
+			const qrRegion = document.getElementById("qr-reader");
+			if (!window.Html5Qrcode) return;
+			const scanner = new Html5Qrcode("qr-reader");
+			const config = { fps: 10, qrbox: 200 };
+			scanner.start({ facingMode: "environment" }, config, async (decodedText) => {
+				try {
+					const resp = await fetch(`${API_BASE}/scan/${decodedText}`);
+					const data = await resp.json();
+					document.getElementById("scan-result").textContent = JSON.stringify(data, null, 2);
+				} catch (err) {
+					document.getElementById("scan-result").textContent = `查询失败: ${err}`;
+				}
+			}, (err) => {
+				// silence scan errors to avoid noisy UI
+			}).catch(err => {
+				qrRegion.innerHTML = `<div class="muted">摄像头不可用: ${err}</div>`;
+			});
+		}
+
+		window.addEventListener("DOMContentLoaded", async () => {
+			await setupForms();
+			await refreshAll();
+			startScanner();
+		});
+	</script>
+</body>
+
+</html>
