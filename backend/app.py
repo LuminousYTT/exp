@@ -348,35 +348,6 @@ def get_material(material_id: int):
         return jsonify(material_to_dict(material))
 
 
-@app.post("/api/personnel")
-def create_personnel():
-    payload = request.json or {}
-    required = ["name", "employee_id", "role"]
-    if not all(k in payload for k in required):
-        return jsonify({"error": "Missing required fields"}), 400
-
-    with SessionLocal() as session:
-        token = new_token()
-        person = Personnel(
-            name=payload["name"],
-            employee_id=payload["employee_id"],
-            role=payload["role"],
-            allowed_operations=payload.get("allowed_operations"),
-            qr_token=token,
-        )
-        session.add(person)
-        session.commit()
-        session.refresh(person)
-        qr_image = generate_qr_base64(token)
-        return jsonify({"personnel": personnel_to_dict(person), "qr_image_base64": qr_image})
-
-
-@app.get("/api/personnel")
-def list_personnel():
-    with SessionLocal() as session:
-        items = session.scalars(select(Personnel)).all()
-        return jsonify([personnel_to_dict(p) for p in items])
-
 
 @app.post("/api/products")
 def create_product():
