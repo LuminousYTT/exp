@@ -802,7 +802,11 @@ def trace_product(qr_token: str):
         )
 
 
-@app.route('/') 
+@app.route('/')
+def index():
+    return jsonify({"status": "ok"})
+
+
 @app.get("/api/scan/<string:qr_token>")
 def scan_token(qr_token: str):
     with SessionLocal() as session:
