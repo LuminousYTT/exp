@@ -1,13 +1,28 @@
 import base64
 import io
 import uuid
+from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from sqlalchemy import select
+from sqlalchemy import select, func
+from werkzeug.security import generate_password_hash, check_password_hash
 
 import config
 from db import Base, engine, SessionLocal
-from models import Material, Personnel, Product
+from models import (
+    Material,
+    Personnel,
+    Product,
+    Process,
+    User,
+    WorkOrder,
+    WorkOrderProgress,
+    WorkOrderException,
+    InspectionRecord,
+    MaterialReceipt,
+    ProductInventoryMove,
+    StocktakeRecord,
+)
 
 app = Flask(__name__)
 CORS(app)
@@ -32,6 +47,53 @@ def generate_qr_base64(data: str) -> str:
 
 def new_token() -> str:
     return uuid.uuid4().hex
+
+
+# ---- 用户 / 权限 ----
+
+
+@app.post("/api/users")
+def create_user():
+    payload = request.json or {}
+    required = ["username", "name", "password", "role"]
+    if not all(k in payload for k in required):
+        return jsonify({"error": "Missing required fields"}), 400
+    with SessionLocal() as session:
+        existing = session.scalars(select(User).where(User.username == payload["username"])).first()
+        if existing:
+            return jsonify({"error": "Username already exists"}), 400
+        user = User(
+            username=payload["username"],
+            name=payload["name"],
+            password_hash=generate_password_hash(payload["password"]),
+            role=payload.get("role", "worker"),
+            permissions=payload.get("permissions"),
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        return jsonify(user_to_dict(user))
+
+
+@app.post("/api/login")
+def login():
+    payload = request.json or {}
+    username = payload.get("username")
+    password = payload.get("password")
+    if not username or not password:
+        return jsonify({"error": "Missing credentials"}), 400
+    with SessionLocal() as session:
+        user = session.scalars(select(User).where(User.username == username, User.is_active == True)).first()
+        if not user or not check_password_hash(user.password_hash, password):
+            return jsonify({"error": "Invalid username or password"}), 401
+        return jsonify(user_to_dict(user))
+
+
+@app.get("/api/users")
+def list_users():
+    with SessionLocal() as session:
+        users = session.scalars(select(User)).all()
+        return jsonify([user_to_dict(u) for u in users])
 
 
 def material_to_dict(m: Material):
@@ -70,6 +132,149 @@ def product_to_dict(p: Product):
         "process_data": p.process_data,
         "qr_token": p.qr_token,
         "created_at": p.created_at.isoformat(),
+    }
+
+
+def process_to_dict(p: Process):
+    return {
+        "id": p.id,
+        "name": p.name,
+        "sequence": p.sequence,
+        "description": p.description,
+        "created_at": p.created_at.isoformat(),
+    }
+
+
+# ---- 基础数据：工序 ----
+
+
+@app.post("/api/processes")
+def create_process():
+    payload = request.json or {}
+    if not payload.get("name"):
+        return jsonify({"error": "Missing name"}), 400
+    with SessionLocal() as session:
+        process = Process(
+            name=payload["name"],
+            sequence=payload.get("sequence"),
+            description=payload.get("description"),
+        )
+        session.add(process)
+        session.commit()
+        session.refresh(process)
+        return jsonify(process_to_dict(process))
+
+
+@app.get("/api/processes")
+def list_processes():
+    with SessionLocal() as session:
+        items = session.scalars(select(Process).order_by(Process.sequence)).all()
+        return jsonify([process_to_dict(p) for p in items])
+
+
+def user_to_dict(u: User):
+    return {
+        "id": u.id,
+        "username": u.username,
+        "name": u.name,
+        "role": u.role,
+        "permissions": u.permissions,
+        "is_active": u.is_active,
+        "created_at": u.created_at.isoformat(),
+    }
+
+
+def work_order_to_dict(w: WorkOrder):
+    return {
+        "id": w.id,
+        "code": w.code,
+        "product_name": w.product_name,
+        "material_batch": w.material_batch,
+        "plan_qty": w.plan_qty,
+        "line": w.line,
+        "status": w.status,
+        "planned_start": w.planned_start,
+        "planned_end": w.planned_end,
+        "qr_token": w.qr_token,
+        "created_by": w.created_by,
+        "notes": w.notes,
+        "created_at": w.created_at.isoformat(),
+    }
+
+
+def progress_to_dict(p: WorkOrderProgress):
+    return {
+        "id": p.id,
+        "work_order_id": p.work_order_id,
+        "actual_qty": p.actual_qty,
+        "defect_qty": p.defect_qty,
+        "operator_id": p.operator_id,
+        "note": p.note,
+        "created_at": p.created_at.isoformat(),
+    }
+
+
+def exception_to_dict(e: WorkOrderException):
+    return {
+        "id": e.id,
+        "work_order_id": e.work_order_id,
+        "exception_type": e.exception_type,
+        "description": e.description,
+        "action": e.action,
+        "status": e.status,
+        "resolved_at": e.resolved_at.isoformat() if e.resolved_at else None,
+        "created_at": e.created_at.isoformat(),
+    }
+
+
+def inspection_to_dict(r: InspectionRecord):
+    return {
+        "id": r.id,
+        "object_type": r.object_type,
+        "object_token": r.object_token,
+        "result": r.result,
+        "inspector": r.inspector,
+        "items": r.items,
+        "note": r.note,
+        "created_at": r.created_at.isoformat(),
+    }
+
+
+def receipt_to_dict(r: MaterialReceipt):
+    return {
+        "id": r.id,
+        "material_id": r.material_id,
+        "location": r.location,
+        "qty": r.qty,
+        "operator": r.operator,
+        "created_at": r.created_at.isoformat(),
+    }
+
+
+def product_move_to_dict(m: ProductInventoryMove):
+    return {
+        "id": m.id,
+        "product_id": m.product_id,
+        "product_name": m.product_name,
+        "direction": m.direction,
+        "qty": m.qty,
+        "location": m.location,
+        "order_code": m.order_code,
+        "customer": m.customer,
+        "note": m.note,
+        "created_at": m.created_at.isoformat(),
+    }
+
+
+def stocktake_to_dict(s: StocktakeRecord):
+    return {
+        "id": s.id,
+        "item_type": s.item_type,
+        "item_id": s.item_id,
+        "real_qty": s.real_qty,
+        "delta": s.delta,
+        "note": s.note,
+        "created_at": s.created_at.isoformat(),
     }
 
 
@@ -168,11 +373,265 @@ def create_product():
         return jsonify({"product": product_to_dict(product), "qr_image_base64": qr_image})
 
 
+# ---- 生产工单 ----
+
+
+@app.post("/api/workorders")
+def create_work_order():
+    payload = request.json or {}
+    required = ["product_name", "plan_qty"]
+    if not all(k in payload for k in required):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    with SessionLocal() as session:
+        code = payload.get("code") or f"WO-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        token = new_token()
+        wo = WorkOrder(
+            code=code,
+            product_name=payload["product_name"],
+            material_batch=payload.get("material_batch"),
+            plan_qty=int(payload.get("plan_qty", 0)),
+            line=payload.get("line"),
+            status=payload.get("status", "待执行"),
+            planned_start=payload.get("planned_start"),
+            planned_end=payload.get("planned_end"),
+            qr_token=token,
+            created_by=payload.get("created_by"),
+            notes=payload.get("notes"),
+        )
+        session.add(wo)
+        session.commit()
+        session.refresh(wo)
+        qr_image = generate_qr_base64(token)
+        return jsonify({"work_order": work_order_to_dict(wo), "qr_image_base64": qr_image})
+
+
+@app.get("/api/workorders")
+def list_work_orders():
+    with SessionLocal() as session:
+        orders = session.scalars(select(WorkOrder).order_by(WorkOrder.created_at.desc())).all()
+        result = []
+        for w in orders:
+            totals = session.execute(
+                select(func.coalesce(func.sum(WorkOrderProgress.actual_qty), 0), func.coalesce(func.sum(WorkOrderProgress.defect_qty), 0)).where(
+                    WorkOrderProgress.work_order_id == w.id
+                )
+            ).first()
+            actual_sum, defect_sum = totals if totals else (0, 0)
+            data = work_order_to_dict(w)
+            data.update({"actual_qty": int(actual_sum or 0), "defect_qty": int(defect_sum or 0)})
+            result.append(data)
+        return jsonify(result)
+
+
+@app.post("/api/workorders/<int:work_order_id>/progress")
+def add_work_order_progress(work_order_id: int):
+    payload = request.json or {}
+    with SessionLocal() as session:
+        wo = session.get(WorkOrder, work_order_id)
+        if not wo:
+            return jsonify({"error": "Work order not found"}), 404
+        prog = WorkOrderProgress(
+            work_order_id=work_order_id,
+            actual_qty=int(payload.get("actual_qty", 0)),
+            defect_qty=int(payload.get("defect_qty", 0)),
+            operator_id=payload.get("operator_id"),
+            note=payload.get("note"),
+        )
+        session.add(prog)
+        # 状态自动推进
+        if wo.status == "待执行":
+            wo.status = "执行中"
+        if wo.plan_qty and payload.get("actual_qty") and int(payload.get("actual_qty", 0)) >= wo.plan_qty:
+            wo.status = "完成"
+        session.commit()
+        session.refresh(prog)
+        return jsonify(progress_to_dict(prog))
+
+
+@app.get("/api/workorders/<int:work_order_id>/progress")
+def list_work_order_progress(work_order_id: int):
+    with SessionLocal() as session:
+        items = session.scalars(select(WorkOrderProgress).where(WorkOrderProgress.work_order_id == work_order_id).order_by(WorkOrderProgress.created_at)).all()
+        return jsonify([progress_to_dict(p) for p in items])
+
+
+@app.post("/api/workorders/<int:work_order_id>/exceptions")
+def create_work_order_exception(work_order_id: int):
+    payload = request.json or {}
+    if not payload.get("exception_type"):
+        return jsonify({"error": "Missing exception_type"}), 400
+    with SessionLocal() as session:
+        wo = session.get(WorkOrder, work_order_id)
+        if not wo:
+            return jsonify({"error": "Work order not found"}), 404
+        exc = WorkOrderException(
+            work_order_id=work_order_id,
+            exception_type=payload["exception_type"],
+            description=payload.get("description"),
+            action=payload.get("action"),
+            status=payload.get("status", "open"),
+        )
+        session.add(exc)
+        session.commit()
+        session.refresh(exc)
+        return jsonify(exception_to_dict(exc))
+
+
+@app.post("/api/workorders/<int:work_order_id>/exceptions/<int:exc_id>/resolve")
+def resolve_work_order_exception(work_order_id: int, exc_id: int):
+    payload = request.json or {}
+    with SessionLocal() as session:
+        exc = session.get(WorkOrderException, exc_id)
+        if not exc or exc.work_order_id != work_order_id:
+            return jsonify({"error": "Exception not found"}), 404
+        exc.status = payload.get("status", "resolved")
+        exc.action = payload.get("action", exc.action)
+        exc.resolved_at = datetime.utcnow()
+        session.commit()
+        session.refresh(exc)
+        return jsonify(exception_to_dict(exc))
+
+
 @app.get("/api/products")
 def list_products():
     with SessionLocal() as session:
         items = session.scalars(select(Product)).all()
         return jsonify([product_to_dict(p) for p in items])
+
+
+# ---- 质检 / 追溯 ----
+
+
+@app.post("/api/inspections")
+def create_inspection():
+    payload = request.json or {}
+    required = ["object_type", "result"]
+    if not all(k in payload for k in required):
+        return jsonify({"error": "Missing required fields"}), 400
+    record = InspectionRecord(
+        object_type=payload["object_type"],
+        object_token=payload.get("object_token"),
+        result=payload["result"],
+        inspector=payload.get("inspector"),
+        items=payload.get("items"),
+        note=payload.get("note"),
+    )
+    with SessionLocal() as session:
+        session.add(record)
+        session.commit()
+        session.refresh(record)
+        return jsonify(inspection_to_dict(record))
+
+
+@app.get("/api/inspections")
+def list_inspections():
+    with SessionLocal() as session:
+        items = session.scalars(select(InspectionRecord).order_by(InspectionRecord.created_at.desc())).all()
+        return jsonify([inspection_to_dict(i) for i in items])
+
+
+# ---- 库存管理 ----
+
+
+@app.post("/api/inventory/material-in")
+def material_in():
+    payload = request.json or {}
+    required = ["material_id", "qty"]
+    if not all(k in payload for k in required):
+        return jsonify({"error": "Missing required fields"}), 400
+    qty = int(payload.get("qty", 0))
+    with SessionLocal() as session:
+        material = session.get(Material, payload["material_id"])
+        if not material:
+            return jsonify({"error": "Material not found"}), 404
+        material.stock_qty = (material.stock_qty or 0) + qty
+        receipt = MaterialReceipt(
+            material_id=material.id,
+            location=payload.get("location"),
+            qty=qty,
+            operator=payload.get("operator"),
+        )
+        session.add(receipt)
+        session.commit()
+        return jsonify({"material": material_to_dict(material), "receipt": receipt_to_dict(receipt)})
+
+
+@app.post("/api/inventory/material-out")
+def material_out():
+    payload = request.json or {}
+    required = ["material_id", "qty"]
+    if not all(k in payload for k in required):
+        return jsonify({"error": "Missing required fields"}), 400
+    qty = int(payload.get("qty", 0))
+    with SessionLocal() as session:
+        material = session.get(Material, payload["material_id"])
+        if not material:
+            return jsonify({"error": "Material not found"}), 404
+        material.stock_qty = (material.stock_qty or 0) - qty
+        receipt = MaterialReceipt(
+            material_id=material.id,
+            location=payload.get("location"),
+            qty=-qty,
+            operator=payload.get("operator"),
+        )
+        session.add(receipt)
+        session.commit()
+        return jsonify({"material": material_to_dict(material), "receipt": receipt_to_dict(receipt)})
+
+
+@app.post("/api/inventory/product-move")
+def product_move():
+    payload = request.json or {}
+    required = ["direction", "qty", "product_name"]
+    if not all(k in payload for k in required):
+        return jsonify({"error": "Missing required fields"}), 400
+    move = ProductInventoryMove(
+        product_id=payload.get("product_id"),
+        product_name=payload["product_name"],
+        direction=payload["direction"],
+        qty=int(payload.get("qty", 0)),
+        location=payload.get("location"),
+        order_code=payload.get("order_code"),
+        customer=payload.get("customer"),
+        note=payload.get("note"),
+    )
+    with SessionLocal() as session:
+        session.add(move)
+        session.commit()
+        session.refresh(move)
+        return jsonify(product_move_to_dict(move))
+
+
+@app.post("/api/stocktake")
+def stocktake():
+    payload = request.json or {}
+    required = ["item_type", "item_id", "real_qty"]
+    if not all(k in payload for k in required):
+        return jsonify({"error": "Missing required fields"}), 400
+    item_type = payload["item_type"]
+    item_id = int(payload["item_id"])
+    real_qty = int(payload["real_qty"])
+    note = payload.get("note")
+    delta = 0
+
+    with SessionLocal() as session:
+        if item_type == "material":
+            material = session.get(Material, item_id)
+            if not material:
+                return jsonify({"error": "Material not found"}), 404
+            delta = real_qty - (material.stock_qty or 0)
+            material.stock_qty = real_qty
+        record = StocktakeRecord(
+            item_type=item_type,
+            item_id=item_id,
+            real_qty=real_qty,
+            delta=delta,
+            note=note,
+        )
+        session.add(record)
+        session.commit()
+        return jsonify(stocktake_to_dict(record))
 
 
 @app.get("/api/scan/<string:qr_token>")
@@ -187,6 +646,9 @@ def scan_token(qr_token: str):
         product = session.scalars(select(Product).where(Product.qr_token == qr_token)).first()
         if product:
             return jsonify({"type": "product", "data": product_to_dict(product)})
+        work_order = session.scalars(select(WorkOrder).where(WorkOrder.qr_token == qr_token)).first()
+        if work_order:
+            return jsonify({"type": "work_order", "data": work_order_to_dict(work_order)})
     return jsonify({"error": "QR token not found"}), 404
 
 

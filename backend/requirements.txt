@@ -4,3 +4,4 @@ sqlalchemy==2.0.25
 pymysql==1.1.0
 python-dotenv==1.0.1
 qrcode==7.4.2
+pillow==10.3.0
