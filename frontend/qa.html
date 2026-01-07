@@ -53,6 +53,36 @@
 				box-shadow: 0 10px 30px rgba(34, 211, 238, 0.25);
 			}
 
+			.func-nav {
+				display: grid;
+				grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+				gap: 10px;
+				padding: 0 24px 16px;
+			}
+
+			.func-nav button {
+				width: 100%;
+				border: 1px solid var(--border);
+				border-radius: 12px;
+				padding: 10px 12px;
+				background: rgba(255, 255, 255, 0.04);
+				color: var(--text);
+				font-weight: 700;
+				font-size: 14px;
+				cursor: pointer;
+				transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+			}
+
+			.func-nav button.active {
+				border-color: rgba(34, 211, 238, 0.7);
+				box-shadow: 0 10px 30px rgba(34, 211, 238, 0.25);
+				transform: translateY(-1px);
+			}
+
+			.hidden {
+				display: none !important;
+			}
+
 			color: var(--text);
 		}
 
@@ -179,6 +209,11 @@
 		<a href="manager.html">生产管理入口</a>
 		<a href="operator.html">一线操作入口</a>
 	</div>
+	<div class="func-nav">
+		<button data-target="material" class="active">物料质检 + 入库</button>
+		<button data-target="product">成品质检入库</button>
+		<button data-target="trace">质量追溯</button>
+	</div>
 	<main>
 		<div class="grid">
 			<div class="card">
@@ -187,7 +222,7 @@
 				<pre class="list" id="scan-result">等待扫码...</pre>
 			</div>
 
-			<div class="card">
+			<div class="card module-card" data-module="material">
 				<h2>物料质检 + 入库</h2>
 				<form id="material-inspection-form">
 					<label>质检员工号</label><input name="employee_id" required />
@@ -209,7 +244,7 @@
 				<div class="list" id="material-qr" style="text-align:center;">物料二维码将在提交后生成</div>
 			</div>
 
-			<div class="card">
+			<div class="card module-card hidden" data-module="product">
 				<h2>成品质检入库 (需扫描完工工单二维码)</h2>
 				<form id="product-inspection-form">
 					<label>质检员工号</label><input name="employee_id" required />
@@ -226,7 +261,7 @@
 				<div class="list" id="product-qr" style="text-align:center;">成品二维码将在提交后生成</div>
 			</div>
 
-			<div class="card" style="grid-column: 1 / -1;">
+			<div class="card module-card hidden" data-module="trace" style="grid-column: 1 / -1;">
 				<h2>质量追溯（扫描成品二维码）</h2>
 				<div class="row-col">
 					<div><label>成品二维码Token</label><input id="trace-token" placeholder="可扫码自动填入" /></div>
@@ -426,6 +461,14 @@
 			setupForms();
 			startScanner();
 			restoreQr();
+			const moduleButtons = document.querySelectorAll('.func-nav button');
+			const modules = document.querySelectorAll('.module-card');
+			function switchModule(target) {
+				moduleButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.target === target));
+				modules.forEach(card => card.classList.toggle('hidden', card.dataset.module !== target));
+			}
+			moduleButtons.forEach(btn => btn.addEventListener('click', () => switchModule(btn.dataset.target)));
+			switchModule('material');
 		});
 	</script>
 </body>
