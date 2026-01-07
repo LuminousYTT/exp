@@ -210,6 +210,8 @@
 
 	<script>
 		const API_BASE = "http://localhost:5000/api";
+		const QR_KEY_MATERIAL = "qr_material_last";
+		const QR_KEY_PRODUCT = "qr_product_last";
 
 		async function postJSON(url, data) {
 			const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
@@ -225,6 +227,13 @@
 		async function refreshAll() {
 			const inspections = await fetch(`${API_BASE}/inspections`).then(r => r.json());
 			renderList("inspection-list", inspections, i => `<div class=\"row\"><div>${i.object_type} · ${i.result}</div><div class=\"pill\">${i.inspector || ""}</div></div>`);
+		}
+
+		function restoreQr() {
+			const m = localStorage.getItem(QR_KEY_MATERIAL);
+			if (m) document.getElementById("material-qr").innerHTML = m;
+			const p = localStorage.getItem(QR_KEY_PRODUCT);
+			if (p) document.getElementById("product-qr").innerHTML = p;
 		}
 
 		function startScanner() {
@@ -266,7 +275,9 @@
 				const res = await postJSON(`${API_BASE}/inspections`, data);
 				alert("物料质检/入库已提交");
 				if (res.qr_image_base64) {
-					document.getElementById("material-qr").innerHTML = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="物料码" style="max-width:140px;" />`;
+					const html = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="物料码" style="max-width:140px;" />`;
+					document.getElementById("material-qr").innerHTML = html;
+					localStorage.setItem(QR_KEY_MATERIAL, html);
 				}
 				await refreshAll();
 			});
@@ -281,7 +292,9 @@
 				const res = await postJSON(`${API_BASE}/inspections`, data);
 				alert("成品质检/入库已提交");
 				if (res.qr_image_base64) {
-					document.getElementById("product-qr").innerHTML = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="成品码" style="max-width:140px;" />`;
+					const html = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="成品码" style="max-width:140px;" />`;
+					document.getElementById("product-qr").innerHTML = html;
+					localStorage.setItem(QR_KEY_PRODUCT, html);
 				}
 				if (res.product?.qr_token) {
 					document.getElementById("trace-token").value = res.product.qr_token;
@@ -309,6 +322,7 @@
 		window.addEventListener("DOMContentLoaded", async () => {
 			setupForms();
 			startScanner();
+			restoreQr();
 			await refreshAll();
 		});
 	</script>

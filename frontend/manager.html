@@ -215,6 +215,7 @@
 
 	<script>
 		const API_BASE = "http://localhost:5000/api";
+		const QR_KEY_WORKORDER = "qr_workorder_last";
 
 		async function postJSON(url, data) {
 			const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
@@ -232,6 +233,15 @@
 			renderList("workorder-list", workorders, w => `<div class="row"><div>${w.code} · ${w.product_name}</div><div class="badge">${w.status} / ${w.actual_qty || 0}/${w.plan_qty}</div></div>`);
 		}
 
+		function restoreQr() {
+			const cached = localStorage.getItem(QR_KEY_WORKORDER);
+			if (cached) {
+				const box = document.getElementById("workorder-qr");
+				box.classList.remove("empty");
+				box.innerHTML = cached;
+			}
+		}
+
 		function setupForms() {
 			document.getElementById("workorder-form").addEventListener("submit", async (e) => {
 				e.preventDefault();
@@ -241,7 +251,9 @@
 				const res = await postJSON(`${API_BASE}/workorders`, data);
 				const box = document.getElementById("workorder-qr");
 				box.classList.remove("empty");
-				box.innerHTML = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="二维码" />`;
+				const html = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="二维码" />`;
+				box.innerHTML = html;
+				localStorage.setItem(QR_KEY_WORKORDER, html);
 				await refreshAll();
 			});
 
@@ -257,6 +269,7 @@
 
 		window.addEventListener("DOMContentLoaded", async () => {
 			setupForms();
+			restoreQr();
 			await refreshAll();
 		});
 	</script>

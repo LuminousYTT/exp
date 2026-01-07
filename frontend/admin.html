@@ -178,6 +178,7 @@
 
 	<script>
 		const API_BASE = "http://localhost:5000/api";
+		const QR_KEY_PERSONNEL = "qr_personnel_last";
 
 		async function postJSON(url, data) {
 			const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
@@ -195,13 +196,22 @@
 			renderList("personnel-list", personnel, p => `<div class="row"><div>${p.employee_id} · ${p.name}</div><div class="badge">${p.role}</div></div>`);
 		}
 
+		function restoreQr() {
+			const cached = localStorage.getItem(QR_KEY_PERSONNEL);
+			if (cached) {
+				document.getElementById("personnel-qr").innerHTML = cached;
+			}
+		}
+
 		function setupForms() {
 			document.getElementById("personnel-form").addEventListener("submit", async (e) => {
 				e.preventDefault();
 				const data = Object.fromEntries(new FormData(e.target).entries());
 				const res = await postJSON(`${API_BASE}/personnel`, data);
 				if (res.qr_image_base64) {
-					document.getElementById("personnel-qr").innerHTML = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="人员二维码" style="max-width:140px;" />`;
+					const html = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="人员二维码" style="max-width:140px;" />`;
+					document.getElementById("personnel-qr").innerHTML = html;
+					localStorage.setItem(QR_KEY_PERSONNEL, html);
 				}
 				await refreshAll();
 			});
@@ -209,6 +219,7 @@
 
 		window.addEventListener("DOMContentLoaded", async () => {
 			setupForms();
+			restoreQr();
 			await refreshAll();
 		});
 	</script>
