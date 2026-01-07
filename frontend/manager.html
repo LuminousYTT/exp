@@ -181,6 +181,7 @@
 			<div class="card">
 				<h2>工单创建 / 下发</h2>
 				<form id="workorder-form">
+					<label>管理员工号</label><input name="employee_id" required />
 					<label>产品名称</label><input name="product_name" required />
 					<label>物料批次</label><input name="material_batch" />
 					<label>计划产量</label><input name="plan_qty" type="number" min="0" required />
@@ -201,6 +202,7 @@
 			<div class="card">
 				<h2>登记生产异常</h2>
 				<form id="exception-form">
+					<label>管理员工号</label><input name="employee_id" required />
 					<label>工单ID</label><input name="work_order_id" type="number" required />
 					<label>异常类型</label><input name="exception_type" required />
 					<label>描述</label><textarea name="description"></textarea>
@@ -235,6 +237,7 @@
 				e.preventDefault();
 				const data = Object.fromEntries(new FormData(e.target).entries());
 				data.plan_qty = Number(data.plan_qty || 0);
+				data.role = "manager";
 				const res = await postJSON(`${API_BASE}/workorders`, data);
 				const box = document.getElementById("workorder-qr");
 				box.classList.remove("empty");
@@ -246,6 +249,7 @@
 				e.preventDefault();
 				const data = Object.fromEntries(new FormData(e.target).entries());
 				const id = data.work_order_id;
+				data.role = "manager";
 				await postJSON(`${API_BASE}/workorders/${id}/exceptions`, data);
 				await refreshAll();
 			});

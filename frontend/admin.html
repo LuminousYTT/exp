@@ -155,36 +155,18 @@
 	</header>
 	<main>
 		<div class="grid">
-			<div class="card">
-				<h2>工序配置</h2>
-				<form id="process-form">
-					<label>工序名称</label><input name="name" required />
-					<label>顺序号</label><input name="sequence" type="number" min="0" />
-					<label>描述</label><textarea name="description"></textarea>
-					<button type="submit">保存工序</button>
-				</form>
-				<div class="list" id="process-list"></div>
-			</div>
-
-			<div class="card">
-				<h2>用户 / 权限</h2>
-				<form id="user-form">
-					<label>用户名</label><input name="username" required />
-					<label>姓名</label><input name="name" required />
-					<label>角色</label><input name="role" value="admin" />
-					<label>密码</label><input name="password" type="password" required />
-					<label>权限描述</label><textarea name="permissions" placeholder="JSON或逗号分隔"></textarea>
-					<button type="submit">创建用户</button>
-				</form>
-				<div class="list" id="user-list"></div>
-			</div>
-
-			<div class="card">
+			<div class="card" style="grid-column: 1 / -1;">
 				<h2>成员注册 / 工号二维码</h2>
 				<form id="personnel-form">
 					<label>姓名</label><input name="name" required />
 					<label>工号</label><input name="employee_id" required />
-					<label>角色</label><input name="role" placeholder="operator / qa / manager" required />
+					<label>角色</label>
+					<select name="role" required>
+						<option value="operator">operator（作业员）</option>
+						<option value="qa">qa（质检）</option>
+						<option value="manager">manager（生产管理）</option>
+						<option value="admin">admin（系统）</option>
+					</select>
 					<label>允许操作(可选)</label><textarea name="allowed_operations" placeholder="逗号分隔或JSON"></textarea>
 					<button type="submit">创建成员并生成二维码</button>
 				</form>
@@ -209,32 +191,11 @@
 		}
 
 		async function refreshAll() {
-			const [processes, users, personnel] = await Promise.all([
-				fetch(`${API_BASE}/processes`).then(r => r.json()),
-				fetch(`${API_BASE}/users`).then(r => r.json()),
-				fetch(`${API_BASE}/personnel`).then(r => r.json()),
-			]);
-			renderList("process-list", processes, p => `<div class="row"><div>${p.sequence ?? "-"} · ${p.name}</div><div class="badge">${p.description || ""}</div></div>`);
-			renderList("user-list", users, u => `<div class="row"><div>${u.username} (${u.name})</div><div class="badge">${u.role}</div></div>`);
+			const personnel = await fetch(`${API_BASE}/personnel`).then(r => r.json());
 			renderList("personnel-list", personnel, p => `<div class="row"><div>${p.employee_id} · ${p.name}</div><div class="badge">${p.role}</div></div>`);
 		}
 
 		function setupForms() {
-			document.getElementById("process-form").addEventListener("submit", async (e) => {
-				e.preventDefault();
-				const data = Object.fromEntries(new FormData(e.target).entries());
-				data.sequence = data.sequence ? Number(data.sequence) : undefined;
-				await postJSON(`${API_BASE}/processes`, data);
-				await refreshAll();
-			});
-
-			document.getElementById("user-form").addEventListener("submit", async (e) => {
-				e.preventDefault();
-				const data = Object.fromEntries(new FormData(e.target).entries());
-				await postJSON(`${API_BASE}/users`, data);
-				await refreshAll();
-			});
-
 			document.getElementById("personnel-form").addEventListener("submit", async (e) => {
 				e.preventDefault();
 				const data = Object.fromEntries(new FormData(e.target).entries());

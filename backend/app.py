@@ -243,6 +243,16 @@ def work_order_to_dict(w: WorkOrder):
     }
 
 
+    def require_personnel(session, role: str, employee_id: str):
+        """Ensure a personnel with given role and employee_id exists; return tuple(person, error_response)."""
+        if not employee_id:
+            return None, (jsonify({"error": "employee_id is required"}), 400)
+        person = session.scalars(select(Personnel).where(Personnel.employee_id == employee_id, Personnel.role == role)).first()
+        if not person:
+            return None, (jsonify({"error": f"Personnel not found for role {role} and employee_id {employee_id}"}), 403)
+        return person, None
+
+
 def progress_to_dict(p: WorkOrderProgress):
     return {
         "id": p.id,
@@ -384,6 +394,11 @@ def create_work_order():
         return jsonify({"error": "Missing required fields"}), 400
 
     with SessionLocal() as session:
+        # only manager with matching employee_id can create work order
+        _, err = require_personnel(session, "manager", payload.get("employee_id"))
+        if err:
+            return err
+
         code = payload.get("code") or f"WO-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
         token = new_token()
         wo = WorkOrder(
@@ -432,18 +447,21 @@ def add_work_order_progress(work_order_id: int):
         if not wo:
             return jsonify({"error": "Work order not found"}), 404
 
-        operator_id = payload.get("operator_id")
         operator_qr = payload.get("operator_qr_token")
-        if operator_qr and not operator_id:
-            op = session.scalars(select(Personnel).where(Personnel.qr_token == operator_qr)).first()
-            if not op:
+        operator_emp_id = payload.get("employee_id")
+        operator = None
+
+        # 优先用二维码，否则用工号；必须是 operator 角色
+        if operator_qr:
+            operator = session.scalars(select(Personnel).where(Personnel.qr_token == operator_qr, Personnel.role == "operator")).first()
+            if not operator:
                 return jsonify({"error": "Operator not found for qr token"}), 404
-            operator_id = op.id
-        elif operator_id:
-            op = session.get(Personnel, int(operator_id))
-            if not op:
-                return jsonify({"error": "Operator not found for id"}), 404
-            operator_id = op.id
+        else:
+            operator, err = require_personnel(session, "operator", operator_emp_id)
+            if err:
+                return err
+
+        operator_id = operator.id if operator else None
 
         prog = WorkOrderProgress(
             work_order_id=work_order_id,
@@ -486,6 +504,9 @@ def create_work_order_exception(work_order_id: int):
     if not payload.get("exception_type"):
         return jsonify({"error": "Missing exception_type"}), 400
     with SessionLocal() as session:
+        _, err = require_personnel(session, "manager", payload.get("employee_id"))
+        if err:
+            return err
         wo = session.get(WorkOrder, work_order_id)
         if not wo:
             return jsonify({"error": "Work order not found"}), 404
@@ -506,6 +527,9 @@ def create_work_order_exception(work_order_id: int):
 def resolve_work_order_exception(work_order_id: int, exc_id: int):
     payload = request.json or {}
     with SessionLocal() as session:
+        _, err = require_personnel(session, "manager", payload.get("employee_id"))
+        if err:
+            return err
         exc = session.get(WorkOrderException, exc_id)
         if not exc or exc.work_order_id != work_order_id:
             return jsonify({"error": "Exception not found"}), 404
@@ -515,13 +539,6 @@ def resolve_work_order_exception(work_order_id: int, exc_id: int):
         session.commit()
         session.refresh(exc)
         return jsonify(exception_to_dict(exc))
-
-
-@app.get("/api/products")
-def list_products():
-    with SessionLocal() as session:
-        items = session.scalars(select(Product)).all()
-        return jsonify([product_to_dict(p) for p in items])
 
 
 # ---- 质检 / 追溯 ----
@@ -538,6 +555,9 @@ def create_inspection():
         return jsonify({"error": "object_type must be material or product"}), 400
 
     with SessionLocal() as session:
+        _, err = require_personnel(session, "qa", payload.get("employee_id"))
+        if err:
+            return err
         if object_type == "material":
             material = None
             qr_image = None
@@ -594,6 +614,9 @@ def create_inspection():
                 "qr_image_base64": qr_image,
             }
             if receipt_obj:
+            _, err = require_personnel(session, "manager", payload.get("employee_id"))
+            if err:
+                return err
                 response["receipt"] = receipt_to_dict(receipt_obj)
             return jsonify(response)
 

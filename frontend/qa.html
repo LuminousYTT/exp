@@ -158,6 +158,7 @@
 			<div class="card">
 				<h2>物料质检 + 入库</h2>
 				<form id="material-inspection-form">
+					<label>质检员工号</label><input name="employee_id" required />
 					<div class="row-col">
 						<div><label>物料ID(已有可填)</label><input name="material_id" type="number" placeholder="已有物料ID" />
 						</div>
@@ -181,6 +182,7 @@
 			<div class="card">
 				<h2>成品质检入库 (需扫描完工工单二维码)</h2>
 				<form id="product-inspection-form">
+					<label>质检员工号</label><input name="employee_id" required />
 					<label>完工工单二维码Token</label>
 					<input name="work_order_token" id="wo-token" placeholder="请扫码工单完工二维码自动填充" required />
 					<div class="row-col">
@@ -260,6 +262,7 @@
 				data.object_type = "material";
 				if (data.material_id) data.material_id = Number(data.material_id);
 				if (data.qty) data.qty = Number(data.qty);
+				data.role = "qa";
 				const res = await postJSON(`${API_BASE}/inspections`, data);
 				alert("物料质检/入库已提交");
 				if (res.qr_image_base64) {
@@ -274,6 +277,7 @@
 				data.object_type = "product";
 				if (data.qty) data.qty = Number(data.qty);
 				data.object_token = data.work_order_token; // completion QR
+				data.role = "qa";
 				const res = await postJSON(`${API_BASE}/inspections`, data);
 				alert("成品质检/入库已提交");
 				if (res.qr_image_base64) {
