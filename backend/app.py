@@ -243,14 +243,14 @@ def work_order_to_dict(w: WorkOrder):
     }
 
 
-    def require_personnel(session, role: str, employee_id: str):
-        """Ensure a personnel with given role and employee_id exists; return tuple(person, error_response)."""
-        if not employee_id:
-            return None, (jsonify({"error": "employee_id is required"}), 400)
-        person = session.scalars(select(Personnel).where(Personnel.employee_id == employee_id, Personnel.role == role)).first()
-        if not person:
-            return None, (jsonify({"error": f"Personnel not found for role {role} and employee_id {employee_id}"}), 403)
-        return person, None
+def require_personnel(session, role: str, employee_id: str):
+    """Ensure a personnel with given role and employee_id exists; return tuple(person, error_response)."""
+    if not employee_id:
+        return None, (jsonify({"error": "employee_id is required"}), 400)
+    person = session.scalars(select(Personnel).where(Personnel.employee_id == employee_id, Personnel.role == role)).first()
+    if not person:
+        return None, (jsonify({"error": f"Personnel not found for role {role} and employee_id {employee_id}"}), 403)
+    return person, None
 
 
 def progress_to_dict(p: WorkOrderProgress):
