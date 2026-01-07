@@ -578,12 +578,6 @@ def process_steps():
         if not wo:
             return jsonify({"error": "Work order not found"}), 404
 
-        def require_inspection(token: str):
-            if not token:
-                return False
-            inspected = session.scalars(select(InspectionRecord).where(InspectionRecord.object_token == token)).first()
-            return bool(inspected)
-
         qr_image = None
         if step == "juice":
             if not input_token:
@@ -615,8 +609,6 @@ def process_steps():
             juice = session.scalars(select(SemiProduct).where(SemiProduct.qr_token == input_token, SemiProduct.stage == "juice")).first()
             if not juice:
                 return jsonify({"error": "juice semi-product not found"}), 404
-            if not require_inspection(juice.qr_token):
-                return jsonify({"error": "上一阶段未完成质检入库，无法酿造"}), 400
             if (juice.stock_qty or 0) < qty:
                 return jsonify({"error": "insufficient juice stock"}), 400
             juice.stock_qty = (juice.stock_qty or 0) - qty
@@ -641,8 +633,6 @@ def process_steps():
         ferment_obj = session.scalars(select(SemiProduct).where(SemiProduct.qr_token == input_token, SemiProduct.stage == "ferment")).first()
         if not ferment_obj:
             return jsonify({"error": "ferment semi-product not found"}), 404
-        if not require_inspection(ferment_obj.qr_token):
-            return jsonify({"error": "上一阶段未完成质检入库，无法装瓶"}), 400
         if (ferment_obj.stock_qty or 0) < qty:
             return jsonify({"error": "insufficient ferment stock"}), 400
         ferment_obj.stock_qty = (ferment_obj.stock_qty or 0) - qty
@@ -730,6 +720,7 @@ def create_inspection():
             qr_image = None
 
             material_id = payload.get("material_id")
+            created_new = False
             if material_id:
                 material = session.get(Material, material_id)
                 if not material:
@@ -744,12 +735,13 @@ def create_inspection():
                     batch_code=payload["batch_code"],
                     supplier=payload["supplier"],
                     inspection_result=payload.get("inspection_result", result),
-                    stock_qty=int(payload.get("qty", 0)),
+                    stock_qty=0,  # start at 0 to avoid double-count when adding receipt
                     qr_token=token,
                     extra=payload.get("extra"),
                 )
                 session.add(material)
                 session.flush()
+                created_new = True
 
             receipt_obj = None
             if payload.get("qty") is not None:
@@ -759,7 +751,7 @@ def create_inspection():
                     material_id=material.id,
                     location=payload.get("location"),
                     qty=qty,
-                    operator=payload.get("operator"),
+                    operator=payload.get("operator") or payload.get("employee_id"),
                 )
                 session.add(receipt_obj)
 
