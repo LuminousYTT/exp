@@ -37,6 +37,7 @@ class Product(Base):
     final_inspection = Column(String(50), nullable=True)
     linked_materials = Column(Text, nullable=True)
     process_data = Column(Text, nullable=True)
+    parent_token = Column(String(64), nullable=True)
     qr_token = Column(String(64), unique=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -144,6 +145,19 @@ class ProductInventoryMove(Base):
     order_code = Column(String(120), nullable=True)
     customer = Column(String(120), nullable=True)
     note = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SemiProduct(Base):
+    __tablename__ = "semi_products"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(120), nullable=False)
+    stage = Column(String(50), nullable=False)  # juice / ferment
+    stock_qty = Column(Integer, nullable=False, default=0)
+    parent_token = Column(String(64), nullable=True)  # upstream material/semi/product token
+    qr_token = Column(String(64), unique=True, nullable=False)
+    work_order_id = Column(Integer, ForeignKey("work_orders.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

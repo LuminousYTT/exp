@@ -22,6 +22,7 @@ from models import (
     InspectionRecord,
     MaterialReceipt,
     ProductInventoryMove,
+    SemiProduct,
 )
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
@@ -195,8 +196,22 @@ def product_to_dict(p: Product):
         "final_inspection": p.final_inspection,
         "linked_materials": p.linked_materials,
         "process_data": p.process_data,
+        "parent_token": p.parent_token,
         "qr_token": p.qr_token,
         "created_at": format_ts(p.created_at),
+    }
+
+
+def semi_product_to_dict(sp: SemiProduct):
+    return {
+        "id": sp.id,
+        "name": sp.name,
+        "stage": sp.stage,
+        "stock_qty": sp.stock_qty,
+        "parent_token": sp.parent_token,
+        "qr_token": sp.qr_token,
+        "work_order_id": sp.work_order_id,
+        "created_at": format_ts(sp.created_at),
     }
 
 
@@ -541,6 +556,114 @@ def list_work_order_progress(work_order_id: int):
         return jsonify([progress_to_dict(p) for p in items])
 
 
+@app.post("/api/process/steps")
+def process_steps():
+    payload = request.json or {}
+    step = payload.get("step")
+    work_order_id = payload.get("work_order_id")
+    qty = int(payload.get("qty", 0))
+    input_token = payload.get("input_token")
+    if step not in {"juice", "ferment", "bottle"}:
+        return jsonify({"error": "step must be juice/ferment/bottle"}), 400
+    if not work_order_id:
+        return jsonify({"error": "work_order_id is required"}), 400
+    if qty <= 0:
+        return jsonify({"error": "qty must be > 0"}), 400
+
+    with SessionLocal() as session:
+        operator, err = require_personnel(session, "operator", payload.get("employee_id"))
+        if err:
+            return err
+        wo = session.get(WorkOrder, work_order_id)
+        if not wo:
+            return jsonify({"error": "Work order not found"}), 404
+
+        def require_inspection(token: str):
+            if not token:
+                return False
+            inspected = session.scalars(select(InspectionRecord).where(InspectionRecord.object_token == token)).first()
+            return bool(inspected)
+
+        qr_image = None
+        if step == "juice":
+            if not input_token:
+                return jsonify({"error": "material qr token required for juicing"}), 400
+            material = session.scalars(select(Material).where(Material.qr_token == input_token)).first()
+            if not material:
+                return jsonify({"error": "material not found for token"}), 404
+            if (material.stock_qty or 0) < qty:
+                return jsonify({"error": "insufficient material stock"}), 400
+            material.stock_qty = (material.stock_qty or 0) - qty
+            semi = SemiProduct(
+                name=f"{wo.product_name}-葡萄汁",
+                stage="juice",
+                stock_qty=qty,
+                parent_token=material.qr_token,
+                qr_token=new_token(),
+                work_order_id=wo.id,
+            )
+            session.add(semi)
+            session.flush()
+            qr_image = generate_qr_base64(semi.qr_token, category="semi", filename=f"semi_{semi.id}.png")
+            session.commit()
+            session.refresh(semi)
+            return jsonify({"semi_product": semi_product_to_dict(semi), "qr_image_base64": qr_image})
+
+        if step == "ferment":
+            if not input_token:
+                return jsonify({"error": "juice qr token required for ferment"}), 400
+            juice = session.scalars(select(SemiProduct).where(SemiProduct.qr_token == input_token, SemiProduct.stage == "juice")).first()
+            if not juice:
+                return jsonify({"error": "juice semi-product not found"}), 404
+            if not require_inspection(juice.qr_token):
+                return jsonify({"error": "上一阶段未完成质检入库，无法酿造"}), 400
+            if (juice.stock_qty or 0) < qty:
+                return jsonify({"error": "insufficient juice stock"}), 400
+            juice.stock_qty = (juice.stock_qty or 0) - qty
+            semi = SemiProduct(
+                name=f"{wo.product_name}-酒液",
+                stage="ferment",
+                stock_qty=qty,
+                parent_token=juice.qr_token,
+                qr_token=new_token(),
+                work_order_id=wo.id,
+            )
+            session.add(semi)
+            session.flush()
+            qr_image = generate_qr_base64(semi.qr_token, category="semi", filename=f"semi_{semi.id}.png")
+            session.commit()
+            session.refresh(semi)
+            return jsonify({"semi_product": semi_product_to_dict(semi), "qr_image_base64": qr_image})
+
+        # bottle
+        if not input_token:
+            return jsonify({"error": "ferment qr token required for bottling"}), 400
+        ferment_obj = session.scalars(select(SemiProduct).where(SemiProduct.qr_token == input_token, SemiProduct.stage == "ferment")).first()
+        if not ferment_obj:
+            return jsonify({"error": "ferment semi-product not found"}), 404
+        if not require_inspection(ferment_obj.qr_token):
+            return jsonify({"error": "上一阶段未完成质检入库，无法装瓶"}), 400
+        if (ferment_obj.stock_qty or 0) < qty:
+            return jsonify({"error": "insufficient ferment stock"}), 400
+        ferment_obj.stock_qty = (ferment_obj.stock_qty or 0) - qty
+
+        product = Product(
+            name=wo.product_name,
+            status="WIP",
+            final_inspection=None,
+            linked_materials=wo.material_batch,
+            process_data=wo.code,
+            parent_token=ferment_obj.qr_token,
+            qr_token=new_token(),
+        )
+        session.add(product)
+        session.flush()
+        qr_image = generate_qr_base64(product.qr_token, category="products", filename=f"product_{product.id}.png")
+        session.commit()
+        session.refresh(product)
+        return jsonify({"product": product_to_dict(product), "qr_image_base64": qr_image})
+
+
 @app.post("/api/workorders/<int:work_order_id>/exceptions")
 def create_work_order_exception(work_order_id: int):
     payload = request.json or {}
@@ -594,8 +717,8 @@ def create_inspection():
     result = payload.get("result")
     if not object_type or not result:
         return jsonify({"error": "Missing required fields"}), 400
-    if object_type not in {"material", "product"}:
-        return jsonify({"error": "object_type must be material or product"}), 400
+    if object_type not in {"material", "product", "semi_product"}:
+        return jsonify({"error": "object_type must be material, semi_product or product"}), 400
 
     with SessionLocal() as session:
         qa_person, err = require_personnel(session, "qa", payload.get("employee_id"))
@@ -661,15 +784,72 @@ def create_inspection():
                 response["receipt"] = receipt_to_dict(receipt_obj)
             return jsonify(response)
 
-        # product: must scan completion work order QR to obtain product info for inbound
+        if object_type == "semi_product":
+            target_token = payload.get("object_token")
+            if not target_token:
+                return jsonify({"error": "object_token is required for semi_product inspection"}), 400
+            semi = session.scalars(select(SemiProduct).where(SemiProduct.qr_token == target_token)).first()
+            if not semi:
+                return jsonify({"error": "Semi product not found for provided token"}), 404
+            record = InspectionRecord(
+                object_type="semi_product",
+                object_token=semi.qr_token,
+                result=result,
+                inspector=inspector_name,
+                items=payload.get("items"),
+                note=payload.get("note"),
+            )
+            session.add(record)
+            session.commit()
+            session.refresh(record)
+            return jsonify({"inspection": inspection_to_dict(record), "semi_product": semi_product_to_dict(semi)})
+
+        # product: allow direct product token (bottling) or completion work order token (旧流程)
         work_token = payload.get("object_token") or payload.get("work_order_token")
         if not work_token:
-            return jsonify({"error": "work order completion QR token is required for product inspection"}), 400
+            return jsonify({"error": "product inspection requires product token or work order completion QR token"}), 400
+
+        existing_product = session.scalars(select(Product).where(Product.qr_token == work_token)).first()
+        qty = int(payload.get("qty", 0))
+
+        if existing_product:
+            existing_product.status = payload.get("status", result)
+            existing_product.final_inspection = result
+            move = ProductInventoryMove(
+                product_id=existing_product.id,
+                product_name=existing_product.name,
+                direction="in",
+                qty=qty,
+                location=payload.get("location"),
+                order_code=existing_product.process_data,
+                customer=payload.get("customer"),
+                note=payload.get("note"),
+            )
+            session.add(move)
+            record = InspectionRecord(
+                object_type="product",
+                object_token=existing_product.qr_token,
+                result=result,
+                inspector=inspector_name,
+                items=payload.get("items"),
+                note=payload.get("note"),
+            )
+            session.add(record)
+            session.commit()
+            session.refresh(record)
+            session.refresh(move)
+            return jsonify(
+                {
+                    "inspection": inspection_to_dict(record),
+                    "inventory_move": product_move_to_dict(move),
+                    "product": product_to_dict(existing_product),
+                }
+            )
+
         wo = session.scalars(select(WorkOrder).where(WorkOrder.completion_qr_token == work_token)).first()
         if not wo:
             return jsonify({"error": "Work order not found for provided completion QR token"}), 404
 
-        qty = int(payload.get("qty", 0))
         product = Product(
             name=wo.product_name,
             status=payload.get("status", result),
@@ -759,6 +939,33 @@ def trace_product(qr_token: str):
             .order_by(InspectionRecord.created_at.desc())
         ).all()
 
+        semi_chain = []
+        semi_tokens = []
+        current_token = product.parent_token
+        last_parent = None
+        while current_token:
+            sp = session.scalars(select(SemiProduct).where(SemiProduct.qr_token == current_token)).first()
+            if not sp:
+                last_parent = current_token
+                break
+            semi_chain.append(semi_product_to_dict(sp))
+            semi_tokens.append(sp.qr_token)
+            last_parent = sp.parent_token
+            current_token = sp.parent_token
+
+        if last_parent:
+            mat_extra = session.scalars(select(Material).where(Material.qr_token == last_parent)).first()
+            if mat_extra and mat_extra not in materials:
+                materials.append(mat_extra)
+
+        semi_inspections = []
+        if semi_tokens:
+            semi_inspections = session.scalars(
+                select(InspectionRecord)
+                .where(InspectionRecord.object_token.in_(semi_tokens))
+                .order_by(InspectionRecord.created_at.desc())
+            ).all()
+
         operators = []
         if work_order:
             operator_ids = [p.operator_id for p in session.scalars(select(WorkOrderProgress).where(WorkOrderProgress.work_order_id == work_order.id)).all() if p.operator_id]
@@ -771,6 +978,7 @@ def trace_product(qr_token: str):
                     "name": product.name,
                     "status": product.status,
                     "final_inspection": product.final_inspection,
+                    "parent_token": product.parent_token,
                     "created_at": format_ts(product.created_at),
                 },
                 "product_inspections": [
@@ -800,6 +1008,17 @@ def trace_product(qr_token: str):
                         "created_at": format_ts(i.created_at),
                     }
                     for i in material_inspections
+                ],
+                "semi_products": semi_chain,
+                "semi_inspections": [
+                    {
+                        "object_token": i.object_token,
+                        "result": i.result,
+                        "inspector": i.inspector,
+                        "note": i.note,
+                        "created_at": format_ts(i.created_at),
+                    }
+                    for i in semi_inspections
                 ],
                 "operators": [
                     {
@@ -831,6 +1050,9 @@ def scan_token(qr_token: str):
         product = session.scalars(select(Product).where(Product.qr_token == qr_token)).first()
         if product:
             return jsonify({"type": "product", "data": product_to_dict(product)})
+        semi = session.scalars(select(SemiProduct).where(SemiProduct.qr_token == qr_token)).first()
+        if semi:
+            return jsonify({"type": "semi_product", "data": semi_product_to_dict(semi)})
         work_order = session.scalars(select(WorkOrder).where((WorkOrder.qr_token == qr_token) | (WorkOrder.completion_qr_token == qr_token))).first()
         if work_order:
             typ = "work_order_completion" if work_order.completion_qr_token == qr_token else "work_order"

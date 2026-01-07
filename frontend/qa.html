@@ -245,11 +245,16 @@
 			</div>
 
 			<div class="card module-card hidden" data-module="product">
-				<h2>成品质检入库 (需扫描完工工单二维码)</h2>
+				<h2>成品质检 / 半成品质检入库</h2>
 				<form id="product-inspection-form">
 					<label>质检员工号</label><input name="employee_id" required />
-					<label>完工工单二维码Token</label>
-					<input name="work_order_token" id="wo-token" placeholder="请扫码工单完工二维码自动填充" required />
+					<label>检验对象</label>
+					<select id="inspection-target" name="inspection_target">
+						<option value="product" selected>最终成品（工单完工二维码）</option>
+						<option value="semi_product">半成品（榨汁/酿造阶段二维码）</option>
+					</select>
+					<label>对象二维码Token</label>
+					<input name="target_token" id="target-token" placeholder="请扫码对应二维码自动填充" required />
 					<div class="row-col">
 						<div><label>数量</label><input name="qty" type="number" placeholder="入库数量" required /></div>
 						<div><label>库位</label><input name="location" placeholder="FG库位" /></div>
@@ -276,6 +281,8 @@
 		const API_BASE = `${location.origin}/api`;
 		const QR_KEY_MATERIAL = "qr_material_last";
 		const QR_KEY_PRODUCT = "qr_product_last";
+		const productInspectionForm = document.getElementById("product-inspection-form");
+		const inspectionTarget = document.getElementById("inspection-target");
 
 		async function postJSON(url, data) {
 			const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
@@ -304,11 +311,16 @@
 						document.querySelector("#material-inspection-form input[name='material_id']").value = data.data.id;
 					}
 					if (data.type === "work_order_completion" && data.data?.completion_qr_token) {
-						document.getElementById("wo-token").value = data.data.completion_qr_token;
+						document.getElementById("target-token").value = data.data.completion_qr_token;
 						document.getElementById("trace-token").value = "";
+						inspectionTarget.value = "product";
 					}
 					if (data.type === "product" && data.data?.qr_token) {
 						document.getElementById("trace-token").value = data.data.qr_token;
+					}
+					if (data.type === "semi_product" && data.data?.qr_token) {
+						document.getElementById("target-token").value = data.data.qr_token;
+						inspectionTarget.value = "semi_product";
 					}
 				} catch (err) {
 					document.getElementById("scan-result").textContent = `查询失败: ${err}`;
@@ -325,6 +337,8 @@
 			const materials = data?.materials || [];
 			const matInspections = data?.material_inspections || [];
 			const prodInspections = data?.product_inspections || [];
+			const semiProducts = data?.semi_products || [];
+			const semiInspections = data?.semi_inspections || [];
 			const operators = data?.operators || [];
 
 			if (product) {
@@ -332,6 +346,7 @@
 				if (product.name) lines.push(`名称: ${product.name}`);
 				if (product.status) lines.push(`状态: ${product.status}`);
 				if (product.final_inspection) lines.push(`最终检验: ${product.final_inspection}`);
+				if (product.parent_token) lines.push(`上游Token: ${product.parent_token}`);
 				if (product.created_at) lines.push(`建档时间: ${product.created_at}`);
 			}
 
@@ -380,6 +395,32 @@
 				});
 			}
 
+			if (semiProducts.length) {
+				lines.push("\n【半成品链路】");
+				semiProducts.forEach(sp => {
+					const parts = [];
+					if (sp.stage) parts.push(sp.stage === "juice" ? "榨汁" : sp.stage === "ferment" ? "酿造" : sp.stage);
+					if (sp.stock_qty !== undefined) parts.push(`余量:${sp.stock_qty}`);
+					if (sp.parent_token) parts.push(`上游:${sp.parent_token}`);
+					if (sp.qr_token) parts.push(`Token:${sp.qr_token}`);
+					if (sp.created_at) parts.push(`时间:${sp.created_at}`);
+					if (parts.length) lines.push(parts.join(" · "));
+				});
+			}
+
+			if (semiInspections.length) {
+				lines.push("\n【半成品检验】");
+				semiInspections.forEach(i => {
+					const parts = [];
+					if (i.object_token) parts.push(`对象:${i.object_token}`);
+					if (i.result) parts.push(`结果:${i.result}`);
+					if (i.inspector) parts.push(`检验员:${i.inspector}`);
+					if (i.note) parts.push(`备注:${i.note}`);
+					if (i.created_at) parts.push(`时间:${i.created_at}`);
+					if (parts.length) lines.push(parts.join(" · "));
+				});
+			}
+
 			if (operators.length) {
 				lines.push("\n【操作人员】");
 				operators.forEach(o => {
@@ -416,16 +457,17 @@
 				}
 			});
 
-			document.getElementById("product-inspection-form").addEventListener("submit", async (e) => {
+			productInspectionForm.addEventListener("submit", async (e) => {
 				e.preventDefault();
 				const data = Object.fromEntries(new FormData(e.target).entries());
-				data.object_type = "product";
 				if (data.qty) data.qty = Number(data.qty);
-				data.object_token = data.work_order_token; // completion QR
+				const target = inspectionTarget.value;
+				data.object_type = target;
+				data.object_token = data.target_token;
 				data.role = "qa";
 				try {
 					const res = await postJSON(`${API_BASE}/inspections`, data);
-					alert("成品质检/入库已提交");
+					alert("检验/入库已提交");
 					if (res.qr_image_base64) {
 						const html = `<img src=\"data:image/png;base64,${res.qr_image_base64}\" alt=\"成品码\" style=\"max-width:140px;\" />`;
 						document.getElementById("product-qr").innerHTML = html;
