@@ -57,6 +57,30 @@
 			margin: 0 auto;
 		}
 
+		.role-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+			gap: 10px;
+		}
+
+		.role-grid a {
+			display: block;
+			text-decoration: none;
+			color: var(--text);
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			padding: 12px;
+			background: rgba(255, 255, 255, 0.04);
+			text-align: center;
+			font-weight: 700;
+			transition: transform .15s ease, box-shadow .15s ease;
+		}
+
+		.role-grid a:hover {
+			transform: translateY(-1px);
+			box-shadow: 0 10px 30px rgba(34, 211, 238, 0.25);
+		}
+
 		.grid {
 			display: grid;
 			gap: 16px;
@@ -213,6 +237,16 @@
 		<div class="pill">前端: HTML+JS+CSS · 后端: Python Flask · DB: MySQL</div>
 	</header>
 	<main>
+		<div class="card" style="margin-bottom:16px;">
+			<h2>按角色进入</h2>
+			<div class="role-grid">
+				<a href="admin.html">系统管理员</a>
+				<a href="manager.html">生产管理</a>
+				<a href="operator.html">一线操作</a>
+				<a href="qa.html">质检 / 仓储</a>
+			</div>
+		</div>
+
 		<div class="grid">
 			<div class="card">
 				<h2>原材料入库</h2>
