@@ -2,7 +2,7 @@ import base64
 import io
 import uuid
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from sqlalchemy import select, func
@@ -32,6 +32,16 @@ CORS(app)
 Base.metadata.create_all(bind=engine)
 
 BASE_QR_DIR = Path(__file__).resolve().parent / "qrcodes"
+TZ = timezone(timedelta(hours=8))  # UTC+8
+
+
+def format_ts(dt):
+    if not dt:
+        return None
+    # Assume stored as UTC naive; attach UTC then convert
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(TZ).isoformat()
 
 
 def generate_qr_base64(data: str, category: str = "misc", filename: str | None = None) -> str:
@@ -161,7 +171,7 @@ def material_to_dict(m: Material):
         "stock_qty": m.stock_qty,
         "qr_token": m.qr_token,
         "extra": m.extra,
-        "created_at": m.created_at.isoformat(),
+        "created_at": format_ts(m.created_at),
     }
 
 
@@ -173,7 +183,7 @@ def personnel_to_dict(p: Personnel):
         "role": p.role,
         "allowed_operations": p.allowed_operations,
         "qr_token": p.qr_token,
-        "created_at": p.created_at.isoformat(),
+        "created_at": format_ts(p.created_at),
     }
 
 
@@ -186,7 +196,7 @@ def product_to_dict(p: Product):
         "linked_materials": p.linked_materials,
         "process_data": p.process_data,
         "qr_token": p.qr_token,
-        "created_at": p.created_at.isoformat(),
+        "created_at": format_ts(p.created_at),
     }
 
 
@@ -196,7 +206,7 @@ def process_to_dict(p: Process):
         "name": p.name,
         "sequence": p.sequence,
         "description": p.description,
-        "created_at": p.created_at.isoformat(),
+        "created_at": format_ts(p.created_at),
     }
 
 
@@ -254,7 +264,7 @@ def work_order_to_dict(w: WorkOrder):
         "completion_qr_token": w.completion_qr_token,
         "created_by": w.created_by,
         "notes": w.notes,
-        "created_at": w.created_at.isoformat(),
+        "created_at": format_ts(w.created_at),
     }
 
 
@@ -276,7 +286,7 @@ def progress_to_dict(p: WorkOrderProgress):
         "defect_qty": p.defect_qty,
         "operator_id": p.operator_id,
         "note": p.note,
-        "created_at": p.created_at.isoformat(),
+        "created_at": format_ts(p.created_at),
     }
 
 
@@ -288,8 +298,8 @@ def exception_to_dict(e: WorkOrderException):
         "description": e.description,
         "action": e.action,
         "status": e.status,
-        "resolved_at": e.resolved_at.isoformat() if e.resolved_at else None,
-        "created_at": e.created_at.isoformat(),
+        "resolved_at": format_ts(e.resolved_at),
+        "created_at": format_ts(e.created_at),
     }
 
 
@@ -302,7 +312,7 @@ def inspection_to_dict(r: InspectionRecord):
         "inspector": r.inspector,
         "items": r.items,
         "note": r.note,
-        "created_at": r.created_at.isoformat(),
+        "created_at": format_ts(r.created_at),
     }
 
 
@@ -313,7 +323,7 @@ def receipt_to_dict(r: MaterialReceipt):
         "location": r.location,
         "qty": r.qty,
         "operator": r.operator,
-        "created_at": r.created_at.isoformat(),
+        "created_at": format_ts(r.created_at),
     }
 
 
@@ -328,7 +338,7 @@ def product_move_to_dict(m: ProductInventoryMove):
         "order_code": m.order_code,
         "customer": m.customer,
         "note": m.note,
-        "created_at": m.created_at.isoformat(),
+        "created_at": format_ts(m.created_at),
     }
 
 
@@ -761,14 +771,14 @@ def trace_product(qr_token: str):
                     "name": product.name,
                     "status": product.status,
                     "final_inspection": product.final_inspection,
-                    "created_at": product.created_at.isoformat(),
+                    "created_at": format_ts(product.created_at),
                 },
                 "product_inspections": [
                     {
                         "result": i.result,
                         "inspector": i.inspector,
                         "note": i.note,
-                        "created_at": i.created_at.isoformat(),
+                        "created_at": format_ts(i.created_at),
                     }
                     for i in product_inspections
                 ],
@@ -787,7 +797,7 @@ def trace_product(qr_token: str):
                         "result": i.result,
                         "inspector": i.inspector,
                         "note": i.note,
-                        "created_at": i.created_at.isoformat(),
+                        "created_at": format_ts(i.created_at),
                     }
                     for i in material_inspections
                 ],
