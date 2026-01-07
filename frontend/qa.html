@@ -156,7 +156,8 @@
 			</div>
 
 			<div class="card">
-				<h2>物料质检 + 入库</h2>
+				<div class="list" id="inspection-list"></div>
+				<div class="list" id="material-qr" style="text-align:center;">物料二维码将在提交后生成</div>
 				<form id="material-inspection-form">
 					<div class="row-col">
 						<div><label>物料ID(已有可填)</label><input name="material_id" type="number" placeholder="已有物料ID" />
@@ -173,7 +174,17 @@
 					<label>检验人</label><input name="inspector" />
 					<label>备注</label><textarea name="note" placeholder="检验项目、缺陷记录等"></textarea>
 					<button type="submit">提交质检并入库</button>
+					<div class="list" id="product-qr" style="text-align:center;">成品二维码将在提交后生成</div>
 				</form>
+
+				<div class="card" style="grid-column: 1 / -1;">
+					<h2>质量追溯（扫描成品二维码）</h2>
+					<div class="row-col">
+						<div><label>成品二维码Token</label><input id="trace-token" placeholder="可扫码自动填入" /></div>
+						<div><button id="trace-btn" type="button">查询追溯</button></div>
+					</div>
+					<pre class="list" id="trace-result">等待扫描或查询...</pre>
+				</div>
 				<div class="list" id="inspection-list"></div>
 			</div>
 
@@ -228,6 +239,10 @@
 					}
 					if (data.type === "work_order" && data.data?.qr_token) {
 						document.getElementById("wo-token").value = data.data.qr_token;
+						document.getElementById("trace-token").value = ""; // clear trace when scanning work order
+					}
+					if (data.type === "product" && data.data?.qr_token) {
+						document.getElementById("trace-token").value = data.data.qr_token;
 					}
 				} catch (err) {
 					document.getElementById("scan-result").textContent = `查询失败: ${err}`;
@@ -244,8 +259,11 @@
 				data.object_type = "material";
 				if (data.material_id) data.material_id = Number(data.material_id);
 				if (data.qty) data.qty = Number(data.qty);
-				await postJSON(`${API_BASE}/inspections`, data);
+				const res = await postJSON(`${API_BASE}/inspections`, data);
 				alert("物料质检/入库已提交");
+				if (res.qr_image_base64) {
+					document.getElementById("material-qr").innerHTML = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="物料码" style="max-width:140px;" />`;
+				}
 				await refreshAll();
 			});
 
@@ -255,9 +273,31 @@
 				data.object_type = "product";
 				if (data.qty) data.qty = Number(data.qty);
 				data.object_token = data.work_order_token;
-				await postJSON(`${API_BASE}/inspections`, data);
+				const res = await postJSON(`${API_BASE}/inspections`, data);
 				alert("成品质检/入库已提交");
+				if (res.qr_image_base64) {
+					document.getElementById("product-qr").innerHTML = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="成品码" style="max-width:140px;" />`;
+				}
+				if (res.product?.qr_token) {
+					document.getElementById("trace-token").value = res.product.qr_token;
+				}
 				await refreshAll();
+			});
+
+			document.getElementById("trace-btn").addEventListener("click", async () => {
+				const token = document.getElementById("trace-token").value.trim();
+				if (!token) {
+					alert("请输入或扫码成品二维码 Token");
+					return;
+				}
+				try {
+					const res = await fetch(`${API_BASE}/trace/product/${token}`);
+					const data = await res.json();
+					if (!res.ok) throw new Error(data.error || "查询失败");
+					document.getElementById("trace-result").textContent = JSON.stringify(data, null, 2);
+				} catch (err) {
+					document.getElementById("trace-result").textContent = `查询失败: ${err}`;
+				}
 			});
 		}
 

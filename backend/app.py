@@ -525,8 +525,7 @@ def create_inspection():
                     extra=payload.get("extra"),
                 )
                 session.add(material)
-                session.flush()  # ensure material.id is available for receipts
-                qr_image = generate_qr_base64(token)
+                session.flush()
 
             receipt_obj = None
             if payload.get("qty") is not None:
@@ -551,12 +550,12 @@ def create_inspection():
             session.add(record)
             session.commit()
             session.refresh(record)
+            qr_image = generate_qr_base64(material.qr_token)
             response = {
                 "inspection": inspection_to_dict(record),
                 "material": material_to_dict(material),
+                "qr_image_base64": qr_image,
             }
-            if qr_image:
-                response["qr_image_base64"] = qr_image
             if receipt_obj:
                 response["receipt"] = receipt_to_dict(receipt_obj)
             return jsonify(response)
@@ -570,9 +569,20 @@ def create_inspection():
             return jsonify({"error": "Work order not found for provided QR token"}), 404
 
         qty = int(payload.get("qty", 0))
+        product = Product(
+            name=wo.product_name,
+            status=payload.get("status", result),
+            final_inspection=result,
+            linked_materials=wo.material_batch,
+            process_data=wo.code,
+            qr_token=new_token(),
+        )
+        session.add(product)
+        session.flush()
+
         move = ProductInventoryMove(
-            product_id=payload.get("product_id"),
-            product_name=wo.product_name,
+            product_id=product.id,
+            product_name=product.name,
             direction="in",
             qty=qty,
             location=payload.get("location"),
@@ -584,7 +594,7 @@ def create_inspection():
 
         record = InspectionRecord(
             object_type="product",
-            object_token=wo.qr_token,
+            object_token=product.qr_token,
             result=result,
             inspector=payload.get("inspector"),
             items=payload.get("items"),
@@ -594,11 +604,14 @@ def create_inspection():
         session.commit()
         session.refresh(record)
         session.refresh(move)
+        qr_image = generate_qr_base64(product.qr_token)
         return jsonify(
             {
                 "inspection": inspection_to_dict(record),
                 "inventory_move": product_move_to_dict(move),
                 "work_order": work_order_to_dict(wo),
+                "product": product_to_dict(product),
+                "qr_image_base64": qr_image,
             }
         )
 
@@ -608,6 +621,54 @@ def list_inspections():
     with SessionLocal() as session:
         items = session.scalars(select(InspectionRecord).order_by(InspectionRecord.created_at.desc())).all()
         return jsonify([inspection_to_dict(i) for i in items])
+
+
+@app.get("/api/trace/product/<string:qr_token>")
+def trace_product(qr_token: str):
+    with SessionLocal() as session:
+        product = session.scalars(select(Product).where(Product.qr_token == qr_token)).first()
+        if not product:
+            return jsonify({"error": "Product not found for token"}), 404
+
+        work_order = None
+        if product.process_data:
+            work_order = session.scalars(select(WorkOrder).where(WorkOrder.code == product.process_data)).first()
+
+        materials = []
+        if work_order and work_order.material_batch:
+            materials = session.scalars(select(Material).where(Material.batch_code == work_order.material_batch)).all()
+
+        material_inspections = []
+        if materials:
+            material_tokens = [m.qr_token for m in materials]
+            material_inspections = session.scalars(
+                select(InspectionRecord)
+                .where(InspectionRecord.object_type == "material", InspectionRecord.object_token.in_(material_tokens))
+                .order_by(InspectionRecord.created_at.desc())
+            ).all()
+
+        product_inspections = session.scalars(
+            select(InspectionRecord)
+            .where(InspectionRecord.object_type == "product", InspectionRecord.object_token == product.qr_token)
+            .order_by(InspectionRecord.created_at.desc())
+        ).all()
+
+        operators = []
+        if work_order:
+            operator_ids = [p.operator_id for p in session.scalars(select(WorkOrderProgress).where(WorkOrderProgress.work_order_id == work_order.id)).all() if p.operator_id]
+            if operator_ids:
+                operators = session.scalars(select(Personnel).where(Personnel.id.in_(operator_ids))).all()
+
+        return jsonify(
+            {
+                "product": product_to_dict(product),
+                "product_inspections": [inspection_to_dict(i) for i in product_inspections],
+                "work_order": work_order_to_dict(work_order) if work_order else None,
+                "materials": [material_to_dict(m) for m in materials],
+                "material_inspections": [inspection_to_dict(i) for i in material_inspections],
+                "operators": [personnel_to_dict(p) for p in operators],
+            }
+        )
 
 
 
