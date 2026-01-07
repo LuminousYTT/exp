@@ -506,22 +506,114 @@ def list_products():
 @app.post("/api/inspections")
 def create_inspection():
     payload = request.json or {}
-    required = ["object_type", "result"]
-    if not all(k in payload for k in required):
+    object_type = payload.get("object_type")
+    result = payload.get("result")
+    if not object_type or not result:
         return jsonify({"error": "Missing required fields"}), 400
-    record = InspectionRecord(
-        object_type=payload["object_type"],
-        object_token=payload.get("object_token"),
-        result=payload["result"],
-        inspector=payload.get("inspector"),
-        items=payload.get("items"),
-        note=payload.get("note"),
-    )
+    if object_type not in {"material", "product"}:
+        return jsonify({"error": "object_type must be material or product"}), 400
+
     with SessionLocal() as session:
+        if object_type == "material":
+            material = None
+            qr_image = None
+
+            material_id = payload.get("material_id")
+            if material_id:
+                material = session.get(Material, material_id)
+                if not material:
+                    return jsonify({"error": "Material not found"}), 404
+            else:
+                required_fields = ["name", "batch_code", "supplier"]
+                if not all(payload.get(k) for k in required_fields):
+                    return jsonify({"error": "Missing material fields: name, batch_code, supplier"}), 400
+                token = new_token()
+                material = Material(
+                    name=payload["name"],
+                    batch_code=payload["batch_code"],
+                    supplier=payload["supplier"],
+                    inspection_result=payload.get("inspection_result", result),
+                    stock_qty=int(payload.get("qty", 0)),
+                    qr_token=token,
+                    extra=payload.get("extra"),
+                )
+                session.add(material)
+                session.flush()  # ensure material.id is available for receipts
+                qr_image = generate_qr_base64(token)
+
+            receipt_obj = None
+            if payload.get("qty") is not None:
+                qty = int(payload.get("qty", 0))
+                material.stock_qty = (material.stock_qty or 0) + qty
+                receipt_obj = MaterialReceipt(
+                    material_id=material.id,
+                    location=payload.get("location"),
+                    qty=qty,
+                    operator=payload.get("operator"),
+                )
+                session.add(receipt_obj)
+
+            record = InspectionRecord(
+                object_type="material",
+                object_token=material.qr_token,
+                result=result,
+                inspector=payload.get("inspector"),
+                items=payload.get("items"),
+                note=payload.get("note"),
+            )
+            session.add(record)
+            session.commit()
+            session.refresh(record)
+            response = {
+                "inspection": inspection_to_dict(record),
+                "material": material_to_dict(material),
+            }
+            if qr_image:
+                response["qr_image_base64"] = qr_image
+            if receipt_obj:
+                response["receipt"] = receipt_to_dict(receipt_obj)
+            return jsonify(response)
+
+        # product: must scan work order QR to obtain product info for inbound
+        work_token = payload.get("object_token") or payload.get("work_order_token")
+        if not work_token:
+            return jsonify({"error": "work order QR token is required for product inspection"}), 400
+        wo = session.scalars(select(WorkOrder).where(WorkOrder.qr_token == work_token)).first()
+        if not wo:
+            return jsonify({"error": "Work order not found for provided QR token"}), 404
+
+        qty = int(payload.get("qty", 0))
+        move = ProductInventoryMove(
+            product_id=payload.get("product_id"),
+            product_name=wo.product_name,
+            direction="in",
+            qty=qty,
+            location=payload.get("location"),
+            order_code=wo.code,
+            customer=payload.get("customer"),
+            note=payload.get("note"),
+        )
+        session.add(move)
+
+        record = InspectionRecord(
+            object_type="product",
+            object_token=wo.qr_token,
+            result=result,
+            inspector=payload.get("inspector"),
+            items=payload.get("items"),
+            note=payload.get("note"),
+        )
         session.add(record)
         session.commit()
         session.refresh(record)
-        return jsonify(inspection_to_dict(record))
+        session.refresh(move)
+        return jsonify(
+            {
+                "inspection": inspection_to_dict(record),
+                "inventory_move": product_move_to_dict(move),
+                "work_order": work_order_to_dict(wo),
+            }
+        )
 
 
 @app.get("/api/inspections")
