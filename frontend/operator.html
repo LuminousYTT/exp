@@ -155,10 +155,12 @@
 					<label>工单ID</label><input name="work_order_id" type="number" required />
 					<label>实际产量</label><input name="actual_qty" type="number" min="0" required />
 					<label>不良数量</label><input name="defect_qty" type="number" min="0" value="0" />
-					<label>操作员ID</label><input name="operator_id" type="number" />
+					<label>操作员ID（或扫码）</label><input name="operator_id" type="number" placeholder="可留空，扫描操作员二维码" />
+					<label>操作员二维码Token</label><input name="operator_qr_token" placeholder="扫码后自动填充" />
 					<label>备注</label><textarea name="note"></textarea>
 					<button type="submit">提交进度</button>
 				</form>
+				<div class="list" id="completion-qr" style="text-align:center;">达成计划产量后自动生成完工二维码</div>
 			</div>
 		</div>
 	</main>
@@ -182,6 +184,13 @@
 					const resp = await fetch(`${API_BASE}/scan/${decodedText}`);
 					const data = await resp.json();
 					document.getElementById("scan-result").textContent = JSON.stringify(data, null, 2);
+					if (data.type === "work_order" && data.data?.id) {
+						document.querySelector("#progress-form input[name='work_order_id']").value = data.data.id;
+					}
+					if (data.type === "personnel" && data.data?.qr_token) {
+						document.querySelector("#progress-form input[name='operator_qr_token']").value = data.data.qr_token;
+						document.querySelector("#progress-form input[name='operator_id']").value = "";
+					}
 				} catch (err) {
 					document.getElementById("scan-result").textContent = `查询失败: ${err}`;
 				}
@@ -197,8 +206,17 @@
 				const id = data.work_order_id;
 				data.actual_qty = Number(data.actual_qty || 0);
 				data.defect_qty = Number(data.defect_qty || 0);
-				await postJSON(`${API_BASE}/workorders/${id}/progress`, data);
+				const res = await postJSON(`${API_BASE}/workorders/${id}/progress`, data);
 				alert("提交成功");
+				const token = res.work_order?.completion_qr_token;
+				const box = document.getElementById("completion-qr");
+				if (token) {
+					const url = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(token)}`;
+					box.innerHTML = `<div>完工二维码</div><img src="${url}" alt="完工二维码" style="max-width:180px;" /><div style="font-size:12px;color:#94a3b8;">Token: ${token}</div>`;
+					box.scrollIntoView({ behavior: "smooth" });
+				} else {
+					box.innerHTML = "达成计划产量后自动生成完工二维码";
+				}
 			});
 		}
 

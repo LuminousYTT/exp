@@ -453,16 +453,24 @@ def add_work_order_progress(work_order_id: int):
             note=payload.get("note"),
         )
         session.add(prog)
-        # 状态自动推进
+        session.flush()  # ensure progress row is available for aggregation
+
+        # 计算累计实绩以判断完工
+        total_actual = session.execute(
+            select(func.coalesce(func.sum(WorkOrderProgress.actual_qty), 0)).where(WorkOrderProgress.work_order_id == work_order_id)
+        ).scalar_one()
+
         if wo.status == "待执行":
             wo.status = "执行中"
-        if wo.plan_qty and payload.get("actual_qty") and int(payload.get("actual_qty", 0)) >= wo.plan_qty:
+        if wo.plan_qty and int(total_actual or 0) >= wo.plan_qty:
             wo.status = "完成"
             if not wo.completion_qr_token:
                 wo.completion_qr_token = new_token()
+
         session.commit()
         session.refresh(prog)
-        return jsonify(progress_to_dict(prog))
+        session.refresh(wo)
+        return jsonify({"progress": progress_to_dict(prog), "work_order": work_order_to_dict(wo)})
 
 
 @app.get("/api/workorders/<int:work_order_id>/progress")
