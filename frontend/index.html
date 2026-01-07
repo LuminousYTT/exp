@@ -127,6 +127,18 @@
 			display: grid;
 			place-items: center;
 			background: rgba(255, 255, 255, 0.02);
+			overflow: hidden;
+		}
+
+		.qr-img img {
+			width: 100%;
+			height: 100%;
+			object-fit: contain;
+			display: block;
+		}
+
+		.qr-img.empty {
+			color: var(--muted);
 		}
 
 		.list {
@@ -203,7 +215,7 @@
 					<label>其他备注</label><textarea name="extra" placeholder="可记录供应商资质、检测单号等"></textarea>
 					<button type="submit">生成二维码并保存</button>
 				</form>
-				<div class="qr-img" id="material-qr">等待生成</div>
+				<div class="qr-img empty" id="material-qr">等待生成</div>
 				<div class="list" id="material-list"></div>
 			</div>
 
@@ -216,7 +228,7 @@
 					<label>作业权限</label><textarea name="allowed_operations" placeholder="示例: SMT上料, 焊接, 质检"></textarea>
 					<button type="submit">生成二维码并保存</button>
 				</form>
-				<div class="qr-img" id="personnel-qr">等待生成</div>
+				<div class="qr-img empty" id="personnel-qr">等待生成</div>
 				<div class="list" id="personnel-list"></div>
 			</div>
 
@@ -235,7 +247,7 @@
 					<label>过程数据</label><textarea name="process_data" placeholder="如焊接温度曲线、AOI缺陷截图链接"></textarea>
 					<button type="submit">生成二维码并保存</button>
 				</form>
-				<div class="qr-img" id="product-qr">等待生成</div>
+				<div class="qr-img empty" id="product-qr">等待生成</div>
 				<div class="list" id="product-list"></div>
 			</div>
 
@@ -279,7 +291,9 @@
 				const data = Object.fromEntries(new FormData(e.target).entries());
 				data.stock_qty = Number(data.stock_qty || 0);
 				const res = await postJSON(`${API_BASE}/materials`, data);
-				document.getElementById("material-qr").innerHTML = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="qr" />`;
+				const box = document.getElementById("material-qr");
+				box.classList.remove("empty");
+				box.innerHTML = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="二维码" />`;
 				await refreshAll();
 			});
 
@@ -287,7 +301,9 @@
 				e.preventDefault();
 				const data = Object.fromEntries(new FormData(e.target).entries());
 				const res = await postJSON(`${API_BASE}/personnel`, data);
-				document.getElementById("personnel-qr").innerHTML = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="qr" />`;
+				const box = document.getElementById("personnel-qr");
+				box.classList.remove("empty");
+				box.innerHTML = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="二维码" />`;
 				await refreshAll();
 			});
 
@@ -295,7 +311,9 @@
 				e.preventDefault();
 				const data = Object.fromEntries(new FormData(e.target).entries());
 				const res = await postJSON(`${API_BASE}/products`, data);
-				document.getElementById("product-qr").innerHTML = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="qr" />`;
+				const box = document.getElementById("product-qr");
+				box.classList.remove("empty");
+				box.innerHTML = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="二维码" />`;
 				await refreshAll();
 			});
 		}
