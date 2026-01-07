@@ -3,7 +3,7 @@ import io
 import uuid
 from pathlib import Path
 from datetime import datetime
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from sqlalchemy import select, func
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -24,7 +24,8 @@ from models import (
     ProductInventoryMove,
 )
 
-app = Flask(__name__)
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path="")
 CORS(app)
 
 # Initialize database schema if missing
@@ -802,9 +803,10 @@ def trace_product(qr_token: str):
         )
 
 
-@app.route('/')
+@app.route("/")
 def index():
-    return jsonify({"status": "ok"})
+    # Serve frontend index for HTTPS access to pages
+    return send_from_directory(app.static_folder, "index.html")
 
 
 @app.get("/api/scan/<string:qr_token>")
@@ -832,5 +834,8 @@ def health():
 
 
 if __name__ == "__main__":
-    app.run(host=config.HOST, port=config.PORT, debug=config.DEBUG, ssl_context=('D:\Vscode\code\exp\\backend\cert.pem', 'D:\Vscode\code\exp\\backend\key.pem'))
+    base_dir = Path(__file__).resolve().parent
+    cert = base_dir / "cert.pem"
+    key = base_dir / "key.pem"
+    app.run(host=config.HOST, port=config.PORT, debug=config.DEBUG, ssl_context=(cert, key))
 
