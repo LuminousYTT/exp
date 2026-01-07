@@ -114,7 +114,7 @@ def create_personnel():
     required = ["name", "employee_id", "role"]
     if not all(payload.get(k) for k in required):
         return jsonify({"error": "Missing required fields: name, employee_id, role"}), 400
-
+ 
     with SessionLocal() as session:
         existing_emp = session.scalars(select(Personnel).where(Personnel.employee_id == payload["employee_id"])).first()
         if existing_emp:
