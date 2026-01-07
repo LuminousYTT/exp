@@ -646,9 +646,6 @@ def create_inspection():
                 "qr_image_base64": qr_image,
             }
             if receipt_obj:
-            _, err = require_personnel(session, "manager", payload.get("employee_id"))
-            if err:
-                return err
                 response["receipt"] = receipt_to_dict(receipt_obj)
             return jsonify(response)
 
