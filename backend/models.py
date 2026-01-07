@@ -77,6 +77,7 @@ class WorkOrder(Base):
     planned_start = Column(String(50), nullable=True)
     planned_end = Column(String(50), nullable=True)
     qr_token = Column(String(64), unique=True, nullable=False)
+    completion_qr_token = Column(String(64), unique=True, nullable=True)
     created_by = Column(String(120), nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

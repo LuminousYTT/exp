@@ -195,6 +195,7 @@ def work_order_to_dict(w: WorkOrder):
         "planned_start": w.planned_start,
         "planned_end": w.planned_end,
         "qr_token": w.qr_token,
+        "completion_qr_token": w.completion_qr_token,
         "created_by": w.created_by,
         "notes": w.notes,
         "created_at": w.created_at.isoformat(),
@@ -418,11 +419,20 @@ def add_work_order_progress(work_order_id: int):
         wo = session.get(WorkOrder, work_order_id)
         if not wo:
             return jsonify({"error": "Work order not found"}), 404
+
+        operator_id = payload.get("operator_id")
+        operator_qr = payload.get("operator_qr_token")
+        if operator_qr and not operator_id:
+            op = session.scalars(select(Personnel).where(Personnel.qr_token == operator_qr)).first()
+            if not op:
+                return jsonify({"error": "Operator not found for qr token"}), 404
+            operator_id = op.id
+
         prog = WorkOrderProgress(
             work_order_id=work_order_id,
             actual_qty=int(payload.get("actual_qty", 0)),
             defect_qty=int(payload.get("defect_qty", 0)),
-            operator_id=payload.get("operator_id"),
+            operator_id=operator_id,
             note=payload.get("note"),
         )
         session.add(prog)
@@ -431,6 +441,8 @@ def add_work_order_progress(work_order_id: int):
             wo.status = "执行中"
         if wo.plan_qty and payload.get("actual_qty") and int(payload.get("actual_qty", 0)) >= wo.plan_qty:
             wo.status = "完成"
+            if not wo.completion_qr_token:
+                wo.completion_qr_token = new_token()
         session.commit()
         session.refresh(prog)
         return jsonify(progress_to_dict(prog))
@@ -560,13 +572,13 @@ def create_inspection():
                 response["receipt"] = receipt_to_dict(receipt_obj)
             return jsonify(response)
 
-        # product: must scan work order QR to obtain product info for inbound
+        # product: must scan completion work order QR to obtain product info for inbound
         work_token = payload.get("object_token") or payload.get("work_order_token")
         if not work_token:
-            return jsonify({"error": "work order QR token is required for product inspection"}), 400
-        wo = session.scalars(select(WorkOrder).where(WorkOrder.qr_token == work_token)).first()
+            return jsonify({"error": "work order completion QR token is required for product inspection"}), 400
+        wo = session.scalars(select(WorkOrder).where(WorkOrder.completion_qr_token == work_token)).first()
         if not wo:
-            return jsonify({"error": "Work order not found for provided QR token"}), 404
+            return jsonify({"error": "Work order not found for provided completion QR token"}), 404
 
         qty = int(payload.get("qty", 0))
         product = Product(
@@ -661,12 +673,48 @@ def trace_product(qr_token: str):
 
         return jsonify(
             {
-                "product": product_to_dict(product),
-                "product_inspections": [inspection_to_dict(i) for i in product_inspections],
+                "product": {
+                    "name": product.name,
+                    "status": product.status,
+                    "final_inspection": product.final_inspection,
+                    "created_at": product.created_at.isoformat(),
+                },
+                "product_inspections": [
+                    {
+                        "result": i.result,
+                        "inspector": i.inspector,
+                        "note": i.note,
+                        "created_at": i.created_at.isoformat(),
+                    }
+                    for i in product_inspections
+                ],
                 "work_order": work_order_to_dict(work_order) if work_order else None,
-                "materials": [material_to_dict(m) for m in materials],
-                "material_inspections": [inspection_to_dict(i) for i in material_inspections],
-                "operators": [personnel_to_dict(p) for p in operators],
+                "materials": [
+                    {
+                        "name": m.name,
+                        "batch_code": m.batch_code,
+                        "supplier": m.supplier,
+                        "inspection_result": m.inspection_result,
+                    }
+                    for m in materials
+                ],
+                "material_inspections": [
+                    {
+                        "result": i.result,
+                        "inspector": i.inspector,
+                        "note": i.note,
+                        "created_at": i.created_at.isoformat(),
+                    }
+                    for i in material_inspections
+                ],
+                "operators": [
+                    {
+                        "name": p.name,
+                        "employee_id": p.employee_id,
+                        "role": p.role,
+                    }
+                    for p in operators
+                ],
             }
         )
 
@@ -684,9 +732,10 @@ def scan_token(qr_token: str):
         product = session.scalars(select(Product).where(Product.qr_token == qr_token)).first()
         if product:
             return jsonify({"type": "product", "data": product_to_dict(product)})
-        work_order = session.scalars(select(WorkOrder).where(WorkOrder.qr_token == qr_token)).first()
+        work_order = session.scalars(select(WorkOrder).where((WorkOrder.qr_token == qr_token) | (WorkOrder.completion_qr_token == qr_token))).first()
         if work_order:
-            return jsonify({"type": "work_order", "data": work_order_to_dict(work_order)})
+            typ = "work_order_completion" if work_order.completion_qr_token == qr_token else "work_order"
+            return jsonify({"type": typ, "data": work_order_to_dict(work_order)})
     return jsonify({"error": "QR token not found"}), 404
 
 
