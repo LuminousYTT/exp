@@ -95,6 +95,47 @@ def list_users():
         return jsonify([user_to_dict(u) for u in users])
 
 
+# ---- 人员管理 ----
+
+
+@app.post("/api/personnel")
+def create_personnel():
+    payload = request.json or {}
+    required = ["name", "employee_id", "role"]
+    if not all(payload.get(k) for k in required):
+        return jsonify({"error": "Missing required fields: name, employee_id, role"}), 400
+
+    with SessionLocal() as session:
+        existing_emp = session.scalars(select(Personnel).where(Personnel.employee_id == payload["employee_id"])).first()
+        if existing_emp:
+            return jsonify({"error": "Employee ID already exists"}), 400
+
+        qr_token = payload.get("qr_token") or new_token()
+        existing_token = session.scalars(select(Personnel).where(Personnel.qr_token == qr_token)).first()
+        if existing_token:
+            return jsonify({"error": "QR token already exists"}), 400
+
+        person = Personnel(
+            name=payload["name"],
+            employee_id=payload["employee_id"],
+            role=payload["role"],
+            allowed_operations=payload.get("allowed_operations"),
+            qr_token=qr_token,
+        )
+        session.add(person)
+        session.commit()
+        session.refresh(person)
+        qr_image = generate_qr_base64(person.qr_token)
+        return jsonify({"personnel": personnel_to_dict(person), "qr_image_base64": qr_image})
+
+
+@app.get("/api/personnel")
+def list_personnel():
+    with SessionLocal() as session:
+        people = session.scalars(select(Personnel).order_by(Personnel.created_at.desc())).all()
+        return jsonify([personnel_to_dict(p) for p in people])
+
+
 def material_to_dict(m: Material):
     return {
         "id": m.id,
@@ -426,6 +467,11 @@ def add_work_order_progress(work_order_id: int):
             op = session.scalars(select(Personnel).where(Personnel.qr_token == operator_qr)).first()
             if not op:
                 return jsonify({"error": "Operator not found for qr token"}), 404
+            operator_id = op.id
+        elif operator_id:
+            op = session.get(Personnel, int(operator_id))
+            if not op:
+                return jsonify({"error": "Operator not found for id"}), 404
             operator_id = op.id
 
         prog = WorkOrderProgress(

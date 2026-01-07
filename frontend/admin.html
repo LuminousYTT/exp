@@ -178,6 +178,19 @@
 				</form>
 				<div class="list" id="user-list"></div>
 			</div>
+
+			<div class="card">
+				<h2>成员注册 / 工号二维码</h2>
+				<form id="personnel-form">
+					<label>姓名</label><input name="name" required />
+					<label>工号</label><input name="employee_id" required />
+					<label>角色</label><input name="role" placeholder="operator / qa / manager" required />
+					<label>允许操作(可选)</label><textarea name="allowed_operations" placeholder="逗号分隔或JSON"></textarea>
+					<button type="submit">创建成员并生成二维码</button>
+				</form>
+				<div class="list" id="personnel-qr" style="text-align:center;">提交后显示二维码，便于打印发放</div>
+				<div class="list" id="personnel-list"></div>
+			</div>
 		</div>
 	</main>
 
@@ -196,12 +209,14 @@
 		}
 
 		async function refreshAll() {
-			const [processes, users] = await Promise.all([
+			const [processes, users, personnel] = await Promise.all([
 				fetch(`${API_BASE}/processes`).then(r => r.json()),
 				fetch(`${API_BASE}/users`).then(r => r.json()),
+				fetch(`${API_BASE}/personnel`).then(r => r.json()),
 			]);
 			renderList("process-list", processes, p => `<div class="row"><div>${p.sequence ?? "-"} · ${p.name}</div><div class="badge">${p.description || ""}</div></div>`);
 			renderList("user-list", users, u => `<div class="row"><div>${u.username} (${u.name})</div><div class="badge">${u.role}</div></div>`);
+			renderList("personnel-list", personnel, p => `<div class="row"><div>${p.employee_id} · ${p.name}</div><div class="badge">${p.role}</div></div>`);
 		}
 
 		function setupForms() {
@@ -217,6 +232,16 @@
 				e.preventDefault();
 				const data = Object.fromEntries(new FormData(e.target).entries());
 				await postJSON(`${API_BASE}/users`, data);
+				await refreshAll();
+			});
+
+			document.getElementById("personnel-form").addEventListener("submit", async (e) => {
+				e.preventDefault();
+				const data = Object.fromEntries(new FormData(e.target).entries());
+				const res = await postJSON(`${API_BASE}/personnel`, data);
+				if (res.qr_image_base64) {
+					document.getElementById("personnel-qr").innerHTML = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="人员二维码" style="max-width:140px;" />`;
+				}
 				await refreshAll();
 			});
 		}
