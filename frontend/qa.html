@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="zh">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>MES 质检与仓储门户</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+	<style>
+		:root {
+			--bg: #0f172a;
+			--card: #111827;
+			--accent: #1d4ed8;
+			--muted: #94a3b8;
+			--border: #1f2937;
+			--text: #e2e8f0;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+			background: var(--bg);
+			color: var(--text);
+		}
+
+		header {
+			padding: 24px;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+		}
+
+		h1 {
+			margin: 0;
+			font-size: 20px;
+			letter-spacing: 0.3px;
+		}
+
+		.pill {
+			background: rgba(255, 255, 255, 0.08);
+			border: 1px solid var(--border);
+			padding: 6px 10px;
+			border-radius: 999px;
+			color: var(--muted);
+			font-size: 12px;
+		}
+
+		main {
+			padding: 0 24px 24px;
+			max-width: 1200px;
+			margin: 0 auto;
+		}
+
+		.grid {
+			display: grid;
+			gap: 16px;
+			grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+		}
+
+		.card {
+			background: var(--card);
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			padding: 16px;
+			box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+		}
+
+		.card h2 {
+			margin-top: 0;
+			font-size: 16px;
+		}
+
+		label {
+			display: block;
+			margin: 10px 0 4px;
+			font-size: 13px;
+			color: var(--muted);
+		}
+
+		input,
+		textarea,
+		select {
+			width: 100%;
+			padding: 10px 12px;
+			border-radius: 10px;
+			border: 1px solid var(--border);
+			background: rgba(255, 255, 255, 0.04);
+			color: var(--text);
+			font-size: 14px;
+		}
+
+		textarea {
+			min-height: 80px;
+		}
+
+		button {
+			margin-top: 12px;
+			width: 100%;
+			background: linear-gradient(120deg, #2563eb, #22d3ee);
+			color: white;
+			border: none;
+			padding: 12px;
+			border-radius: 12px;
+			font-weight: 700;
+			cursor: pointer;
+		}
+
+		.list {
+			margin-top: 12px;
+			max-height: 260px;
+			overflow: auto;
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			padding: 10px;
+			background: rgba(255, 255, 255, 0.02);
+		}
+
+		#qr-reader {
+			width: 100%;
+			min-height: 240px;
+		}
+
+		pre {
+			white-space: pre-wrap;
+		}
+
+		.row-col {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+			gap: 8px;
+		}
+	</style>
+	<script src="https://unpkg.com/html5-qrcode" defer></script>
+</head>
+
+<body>
+	<header>
+		<div>
+			<h1>质检 / 仓储门户</h1>
+			<div class="pill">扫码质检 / 入出库 / 盘点</div>
+		</div>
+		<a class="pill" href="index.html">返回总览</a>
+	</header>
+	<main>
+		<div class="grid">
+			<div class="card">
+				<h2>扫码查询</h2>
+				<div id="qr-reader"></div>
+				<pre class="list" id="scan-result">等待扫码...</pre>
+			</div>
+
+			<div class="card">
+				<h2>质检记录</h2>
+				<form id="inspection-form">
+					<label>对象类型</label>
+					<select name="object_type">
+						<option value="material">物料</option>
+						<option value="process">工序产品</option>
+						<option value="product">成品</option>
+						<option value="workorder">工单</option>
+					</select>
+					<label>对象Token/二维码值</label><input name="object_token" />
+					<label>结果</label><input name="result" placeholder="合格/不合格/让步" required />
+					<label>检验人</label><input name="inspector" />
+					<label>检验项目/备注</label><textarea name="note"></textarea>
+					<button type="submit">提交质检</button>
+				</form>
+				<div class="list" id="inspection-list"></div>
+			</div>
+
+			<div class="card">
+				<h2>物料入库 / 出库</h2>
+				<form id="material-in-form">
+					<label>入库 (物料ID, 数量, 位置)</label>
+					<div class="row-col">
+						<div><input name="material_id" type="number" placeholder="物料ID" required /></div>
+						<div><input name="qty" type="number" placeholder="数量" required /></div>
+						<div><input name="location" placeholder="货架" /></div>
+					</div>
+					<button type="submit">入库</button>
+				</form>
+				<form id="material-out-form">
+					<label>出库 (物料ID, 数量, 位置)</label>
+					<div class="row-col">
+						<div><input name="material_id" type="number" placeholder="物料ID" required /></div>
+						<div><input name="qty" type="number" placeholder="数量" required /></div>
+						<div><input name="location" placeholder="货架" /></div>
+					</div>
+					<button type="submit">出库</button>
+				</form>
+			</div>
+
+			<div class="card">
+				<h2>成品出/入库 & 盘点</h2>
+				<form id="product-move-form">
+					<label>成品出/入库 (方向 in/out)</label>
+					<div class="row-col">
+						<div><input name="product_name" placeholder="成品名称" required /></div>
+						<div><input name="direction" placeholder="in/out" required /></div>
+						<div><input name="qty" type="number" placeholder="数量" required /></div>
+					</div>
+					<label>客户/订单/位置</label>
+					<div class="row-col">
+						<div><input name="customer" placeholder="客户" /></div>
+						<div><input name="order_code" placeholder="订单号" /></div>
+						<div><input name="location" placeholder="库位" /></div>
+					</div>
+					<button type="submit">提交成品出入</button>
+				</form>
+				<form id="stocktake-form">
+					<label>盘点 (material/product)</label>
+					<div class="row-col">
+						<div><input name="item_type" placeholder="material" required /></div>
+						<div><input name="item_id" type="number" placeholder="ID" required /></div>
+						<div><input name="real_qty" type="number" placeholder="盘点数量" required /></div>
+					</div>
+					<label>备注</label><input name="note" />
+					<button type="submit">提交盘点</button>
+				</form>
+			</div>
+		</div>
+	</main>
+
+	<script>
+		const API_BASE = "http://localhost:5000/api";
+
+		async function postJSON(url, data) {
+			const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+			if (!resp.ok) throw new Error(await resp.text());
+			return resp.json();
+		}
+
+		function renderList(id, items, mapper) {
+			const box = document.getElementById(id);
+			box.innerHTML = items.map(mapper).join("");
+		}
+
+		async function refreshAll() {
+			const inspections = await fetch(`${API_BASE}/inspections`).then(r => r.json());
+			renderList("inspection-list", inspections, i => `<div class=\"row\"><div>${i.object_type} · ${i.result}</div><div class=\"pill\">${i.inspector || ""}</div></div>`);
+		}
+
+		function startScanner() {
+			const qrRegion = document.getElementById("qr-reader");
+			if (!window.Html5Qrcode) return;
+			const scanner = new Html5Qrcode("qr-reader");
+			const config = { fps: 10, qrbox: 200 };
+			scanner.start({ facingMode: "environment" }, config, async (decodedText) => {
+				try {
+					const resp = await fetch(`${API_BASE}/scan/${decodedText}`);
+					const data = await resp.json();
+					document.getElementById("scan-result").textContent = JSON.stringify(data, null, 2);
+				} catch (err) {
+					document.getElementById("scan-result").textContent = `查询失败: ${err}`;
+				}
+			}, () => { }).catch(err => {
+				qrRegion.innerHTML = `<div class="pill">摄像头不可用: ${err}</div>`;
+			});
+		}
+
+		function setupForms() {
+			document.getElementById("inspection-form").addEventListener("submit", async (e) => {
+				e.preventDefault();
+				const data = Object.fromEntries(new FormData(e.target).entries());
+				await postJSON(`${API_BASE}/inspections`, data);
+				await refreshAll();
+			});
+
+			document.getElementById("material-in-form").addEventListener("submit", async (e) => {
+				e.preventDefault();
+				const data = Object.fromEntries(new FormData(e.target).entries());
+				data.material_id = Number(data.material_id);
+				data.qty = Number(data.qty);
+				await postJSON(`${API_BASE}/inventory/material-in`, data);
+				alert("入库成功");
+			});
+
+			document.getElementById("material-out-form").addEventListener("submit", async (e) => {
+				e.preventDefault();
+				const data = Object.fromEntries(new FormData(e.target).entries());
+				data.material_id = Number(data.material_id);
+				data.qty = Number(data.qty);
+				await postJSON(`${API_BASE}/inventory/material-out`, data);
+				alert("出库成功");
+			});
+
+			document.getElementById("product-move-form").addEventListener("submit", async (e) => {
+				e.preventDefault();
+				const data = Object.fromEntries(new FormData(e.target).entries());
+				data.qty = Number(data.qty || 0);
+				await postJSON(`${API_BASE}/inventory/product-move`, data);
+				alert("已提交");
+			});
+
+			document.getElementById("stocktake-form").addEventListener("submit", async (e) => {
+				e.preventDefault();
+				const data = Object.fromEntries(new FormData(e.target).entries());
+				data.item_id = Number(data.item_id);
+				data.real_qty = Number(data.real_qty);
+				await postJSON(`${API_BASE}/stocktake`, data);
+				alert("盘点完成");
+			});
+		}
+
+		window.addEventListener("DOMContentLoaded", async () => {
+			setupForms();
+			startScanner();
+			await refreshAll();
+		});
+	</script>
+</body>
+
+</html>

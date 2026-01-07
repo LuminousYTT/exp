@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="zh">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>MES 生产管理门户</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+	<style>
+		:root {
+			--bg: #0f172a;
+			--card: #111827;
+			--accent: #1d4ed8;
+			--muted: #94a3b8;
+			--border: #1f2937;
+			--text: #e2e8f0;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+			background: var(--bg);
+			color: var(--text);
+		}
+
+		header {
+			padding: 24px;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+		}
+
+		h1 {
+			margin: 0;
+			font-size: 20px;
+			letter-spacing: 0.3px;
+		}
+
+		.pill {
+			background: rgba(255, 255, 255, 0.08);
+			border: 1px solid var(--border);
+			padding: 6px 10px;
+			border-radius: 999px;
+			color: var(--muted);
+			font-size: 12px;
+		}
+
+		main {
+			padding: 0 24px 24px;
+			max-width: 1200px;
+			margin: 0 auto;
+		}
+
+		.grid {
+			display: grid;
+			gap: 16px;
+			grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+		}
+
+		.card {
+			background: var(--card);
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			padding: 16px;
+			box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+		}
+
+		.card h2 {
+			margin-top: 0;
+			font-size: 16px;
+		}
+
+		label {
+			display: block;
+			margin: 10px 0 4px;
+			font-size: 13px;
+			color: var(--muted);
+		}
+
+		input,
+		textarea,
+		select {
+			width: 100%;
+			padding: 10px 12px;
+			border-radius: 10px;
+			border: 1px solid var(--border);
+			background: rgba(255, 255, 255, 0.04);
+			color: var(--text);
+			font-size: 14px;
+		}
+
+		textarea {
+			min-height: 80px;
+		}
+
+		button {
+			margin-top: 12px;
+			width: 100%;
+			background: linear-gradient(120deg, #2563eb, #22d3ee);
+			color: white;
+			border: none;
+			padding: 12px;
+			border-radius: 12px;
+			font-weight: 700;
+			cursor: pointer;
+		}
+
+		.list {
+			margin-top: 12px;
+			max-height: 280px;
+			overflow: auto;
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			padding: 10px;
+			background: rgba(255, 255, 255, 0.02);
+		}
+
+		.row {
+			display: flex;
+			justify-content: space-between;
+			gap: 8px;
+			padding: 8px 10px;
+			border-bottom: 1px solid var(--border);
+			font-size: 13px;
+		}
+
+		.row:last-child {
+			border-bottom: none;
+		}
+
+		.badge {
+			padding: 4px 8px;
+			border-radius: 999px;
+			font-size: 11px;
+			color: #dbeafe;
+			background: rgba(37, 99, 235, 0.16);
+			border: 1px solid rgba(37, 99, 235, 0.35);
+		}
+
+		.qr-img {
+			margin-top: 10px;
+			width: 140px;
+			height: 140px;
+			border: 1px dashed var(--border);
+			border-radius: 12px;
+			display: grid;
+			place-items: center;
+			background: rgba(255, 255, 255, 0.02);
+			overflow: hidden;
+		}
+
+		.qr-img img {
+			width: 100%;
+			height: 100%;
+			object-fit: contain;
+			display: block;
+		}
+
+		.qr-img.empty {
+			color: var(--muted);
+		}
+	</style>
+</head>
+
+<body>
+	<header>
+		<div>
+			<h1>生产管理门户</h1>
+			<div class="pill">工单创建 / 进度监控 / 异常</div>
+		</div>
+		<a class="pill" href="index.html">返回总览</a>
+	</header>
+	<main>
+		<div class="grid">
+			<div class="card">
+				<h2>工单创建 / 下发</h2>
+				<form id="workorder-form">
+					<label>产品名称</label><input name="product_name" required />
+					<label>物料批次</label><input name="material_batch" />
+					<label>计划产量</label><input name="plan_qty" type="number" min="0" required />
+					<label>产线/工位</label><input name="line" />
+					<label>计划开工</label><input name="planned_start" placeholder="2026-01-07 08:00" />
+					<label>计划完工</label><input name="planned_end" placeholder="2026-01-07 20:00" />
+					<label>备注</label><textarea name="notes"></textarea>
+					<button type="submit">生成工单二维码并下发</button>
+				</form>
+				<div class="qr-img empty" id="workorder-qr">等待生成</div>
+			</div>
+
+			<div class="card">
+				<h2>工单列表 / 进度</h2>
+				<div class="list" id="workorder-list"></div>
+			</div>
+
+			<div class="card">
+				<h2>登记生产异常</h2>
+				<form id="exception-form">
+					<label>工单ID</label><input name="work_order_id" type="number" required />
+					<label>异常类型</label><input name="exception_type" required />
+					<label>描述</label><textarea name="description"></textarea>
+					<label>处置方案</label><textarea name="action"></textarea>
+					<button type="submit">提交异常</button>
+				</form>
+			</div>
+		</div>
+	</main>
+
+	<script>
+		const API_BASE = "http://localhost:5000/api";
+
+		async function postJSON(url, data) {
+			const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+			if (!resp.ok) throw new Error(await resp.text());
+			return resp.json();
+		}
+
+		function renderList(id, items, mapper) {
+			const box = document.getElementById(id);
+			box.innerHTML = items.map(mapper).join("");
+		}
+
+		async function refreshAll() {
+			const workorders = await fetch(`${API_BASE}/workorders`).then(r => r.json());
+			renderList("workorder-list", workorders, w => `<div class="row"><div>${w.code} · ${w.product_name}</div><div class="badge">${w.status} / ${w.actual_qty || 0}/${w.plan_qty}</div></div>`);
+		}
+
+		function setupForms() {
+			document.getElementById("workorder-form").addEventListener("submit", async (e) => {
+				e.preventDefault();
+				const data = Object.fromEntries(new FormData(e.target).entries());
+				data.plan_qty = Number(data.plan_qty || 0);
+				const res = await postJSON(`${API_BASE}/workorders`, data);
+				const box = document.getElementById("workorder-qr");
+				box.classList.remove("empty");
+				box.innerHTML = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="二维码" />`;
+				await refreshAll();
+			});
+
+			document.getElementById("exception-form").addEventListener("submit", async (e) => {
+				e.preventDefault();
+				const data = Object.fromEntries(new FormData(e.target).entries());
+				const id = data.work_order_id;
+				await postJSON(`${API_BASE}/workorders/${id}/exceptions`, data);
+				await refreshAll();
+			});
+		}
+
+		window.addEventListener("DOMContentLoaded", async () => {
+			setupForms();
+			await refreshAll();
+		});
+	</script>
+</body>
+
+</html>

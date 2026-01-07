@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="zh">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>MES 一线操作门户</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+	<style>
+		:root {
+			--bg: #0f172a;
+			--card: #111827;
+			--accent: #1d4ed8;
+			--muted: #94a3b8;
+			--border: #1f2937;
+			--text: #e2e8f0;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+			background: var(--bg);
+			color: var(--text);
+		}
+
+		header {
+			padding: 24px;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+		}
+
+		h1 {
+			margin: 0;
+			font-size: 20px;
+			letter-spacing: 0.3px;
+		}
+
+		.pill {
+			background: rgba(255, 255, 255, 0.08);
+			border: 1px solid var(--border);
+			padding: 6px 10px;
+			border-radius: 999px;
+			color: var(--muted);
+			font-size: 12px;
+		}
+
+		main {
+			padding: 0 24px 24px;
+			max-width: 1200px;
+			margin: 0 auto;
+		}
+
+		.grid {
+			display: grid;
+			gap: 16px;
+			grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+		}
+
+		.card {
+			background: var(--card);
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			padding: 16px;
+			box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+		}
+
+		.card h2 {
+			margin-top: 0;
+			font-size: 16px;
+		}
+
+		label {
+			display: block;
+			margin: 10px 0 4px;
+			font-size: 13px;
+			color: var(--muted);
+		}
+
+		input,
+		textarea,
+		select {
+			width: 100%;
+			padding: 10px 12px;
+			border-radius: 10px;
+			border: 1px solid var(--border);
+			background: rgba(255, 255, 255, 0.04);
+			color: var(--text);
+			font-size: 14px;
+		}
+
+		textarea {
+			min-height: 80px;
+		}
+
+		button {
+			margin-top: 12px;
+			width: 100%;
+			background: linear-gradient(120deg, #2563eb, #22d3ee);
+			color: white;
+			border: none;
+			padding: 12px;
+			border-radius: 12px;
+			font-weight: 700;
+			cursor: pointer;
+		}
+
+		.list {
+			margin-top: 12px;
+			max-height: 260px;
+			overflow: auto;
+			border: 1px solid var(--border);
+			border-radius: 12px;
+			padding: 10px;
+			background: rgba(255, 255, 255, 0.02);
+		}
+
+		#qr-reader {
+			width: 100%;
+			min-height: 260px;
+		}
+
+		pre {
+			white-space: pre-wrap;
+		}
+	</style>
+	<script src="https://unpkg.com/html5-qrcode" defer></script>
+</head>
+
+<body>
+	<header>
+		<div>
+			<h1>一线操作门户</h1>
+			<div class="pill">扫码领单 / 进度回报</div>
+		</div>
+		<a class="pill" href="index.html">返回总览</a>
+	</header>
+	<main>
+		<div class="grid">
+			<div class="card">
+				<h2>扫码接单</h2>
+				<div id="qr-reader"></div>
+				<pre class="list" id="scan-result">等待扫码...</pre>
+			</div>
+
+			<div class="card">
+				<h2>工单进度回报</h2>
+				<form id="progress-form">
+					<label>工单ID</label><input name="work_order_id" type="number" required />
+					<label>实际产量</label><input name="actual_qty" type="number" min="0" required />
+					<label>不良数量</label><input name="defect_qty" type="number" min="0" value="0" />
+					<label>操作员ID</label><input name="operator_id" type="number" />
+					<label>备注</label><textarea name="note"></textarea>
+					<button type="submit">提交进度</button>
+				</form>
+			</div>
+		</div>
+	</main>
+
+	<script>
+		const API_BASE = "http://localhost:5000/api";
+
+		async function postJSON(url, data) {
+			const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+			if (!resp.ok) throw new Error(await resp.text());
+			return resp.json();
+		}
+
+		function startScanner() {
+			const qrRegion = document.getElementById("qr-reader");
+			if (!window.Html5Qrcode) return;
+			const scanner = new Html5Qrcode("qr-reader");
+			const config = { fps: 10, qrbox: 220 };
+			scanner.start({ facingMode: "environment" }, config, async (decodedText) => {
+				try {
+					const resp = await fetch(`${API_BASE}/scan/${decodedText}`);
+					const data = await resp.json();
+					document.getElementById("scan-result").textContent = JSON.stringify(data, null, 2);
+				} catch (err) {
+					document.getElementById("scan-result").textContent = `查询失败: ${err}`;
+				}
+			}, () => { }).catch(err => {
+				qrRegion.innerHTML = `<div class="pill">摄像头不可用: ${err}</div>`;
+			});
+		}
+
+		function setupForms() {
+			document.getElementById("progress-form").addEventListener("submit", async (e) => {
+				e.preventDefault();
+				const data = Object.fromEntries(new FormData(e.target).entries());
+				const id = data.work_order_id;
+				data.actual_qty = Number(data.actual_qty || 0);
+				data.defect_qty = Number(data.defect_qty || 0);
+				await postJSON(`${API_BASE}/workorders/${id}/progress`, data);
+				alert("提交成功");
+			});
+		}
+
+		window.addEventListener("DOMContentLoaded", () => {
+			setupForms();
+			startScanner();
+		});
+	</script>
+</body>
+
+</html>
