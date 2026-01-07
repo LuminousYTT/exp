@@ -165,7 +165,6 @@
 						<option value="operator">operator（作业员）</option>
 						<option value="qa">qa（质检）</option>
 						<option value="manager">manager（生产管理）</option>
-						<option value="admin">admin（系统）</option>
 					</select>
 					<label>允许操作(可选)</label><textarea name="allowed_operations" placeholder="逗号分隔或JSON"></textarea>
 					<button type="submit">创建成员并生成二维码</button>
@@ -207,13 +206,17 @@
 			document.getElementById("personnel-form").addEventListener("submit", async (e) => {
 				e.preventDefault();
 				const data = Object.fromEntries(new FormData(e.target).entries());
-				const res = await postJSON(`${API_BASE}/personnel`, data);
-				if (res.qr_image_base64) {
-					const html = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="人员二维码" style="max-width:140px;" />`;
-					document.getElementById("personnel-qr").innerHTML = html;
-					localStorage.setItem(QR_KEY_PERSONNEL, html);
+				try {
+					const res = await postJSON(`${API_BASE}/personnel`, data);
+					if (res.qr_image_base64) {
+						const html = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="人员二维码" style="max-width:140px;" />`;
+						document.getElementById("personnel-qr").innerHTML = html;
+						localStorage.setItem(QR_KEY_PERSONNEL, html);
+					}
+					await refreshAll();
+				} catch (err) {
+					alert(`创建失败: ${err}`);
 				}
-				await refreshAll();
 			});
 		}
 

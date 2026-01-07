@@ -272,14 +272,18 @@
 				if (data.material_id) data.material_id = Number(data.material_id);
 				if (data.qty) data.qty = Number(data.qty);
 				data.role = "qa";
-				const res = await postJSON(`${API_BASE}/inspections`, data);
-				alert("物料质检/入库已提交");
-				if (res.qr_image_base64) {
-					const html = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="物料码" style="max-width:140px;" />`;
-					document.getElementById("material-qr").innerHTML = html;
-					localStorage.setItem(QR_KEY_MATERIAL, html);
+				try {
+					const res = await postJSON(`${API_BASE}/inspections`, data);
+					alert("物料质检/入库已提交");
+					if (res.qr_image_base64) {
+						const html = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="物料码" style="max-width:140px;" />`;
+						document.getElementById("material-qr").innerHTML = html;
+						localStorage.setItem(QR_KEY_MATERIAL, html);
+					}
+					await refreshAll();
+				} catch (err) {
+					alert(`提交失败: ${err}`);
 				}
-				await refreshAll();
 			});
 
 			document.getElementById("product-inspection-form").addEventListener("submit", async (e) => {
@@ -289,17 +293,21 @@
 				if (data.qty) data.qty = Number(data.qty);
 				data.object_token = data.work_order_token; // completion QR
 				data.role = "qa";
-				const res = await postJSON(`${API_BASE}/inspections`, data);
-				alert("成品质检/入库已提交");
-				if (res.qr_image_base64) {
-					const html = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="成品码" style="max-width:140px;" />`;
-					document.getElementById("product-qr").innerHTML = html;
-					localStorage.setItem(QR_KEY_PRODUCT, html);
+				try {
+					const res = await postJSON(`${API_BASE}/inspections`, data);
+					alert("成品质检/入库已提交");
+					if (res.qr_image_base64) {
+						const html = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="成品码" style="max-width:140px;" />`;
+						document.getElementById("product-qr").innerHTML = html;
+						localStorage.setItem(QR_KEY_PRODUCT, html);
+					}
+					if (res.product?.qr_token) {
+						document.getElementById("trace-token").value = res.product.qr_token;
+					}
+					await refreshAll();
+				} catch (err) {
+					alert(`提交失败: ${err}`);
 				}
-				if (res.product?.qr_token) {
-					document.getElementById("trace-token").value = res.product.qr_token;
-				}
-				await refreshAll();
 			});
 
 			document.getElementById("trace-btn").addEventListener("click", async () => {

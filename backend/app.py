@@ -114,6 +114,10 @@ def create_personnel():
     required = ["name", "employee_id", "role"]
     if not all(payload.get(k) for k in required):
         return jsonify({"error": "Missing required fields: name, employee_id, role"}), 400
+
+    allowed_roles = {"operator", "qa", "manager"}
+    if payload.get("role") not in allowed_roles:
+        return jsonify({"error": "role must be one of operator/qa/manager"}), 400
  
     with SessionLocal() as session:
         existing_emp = session.scalars(select(Personnel).where(Personnel.employee_id == payload["employee_id"])).first()
@@ -399,9 +403,9 @@ def create_product():
 @app.post("/api/workorders")
 def create_work_order():
     payload = request.json or {}
-    required = ["product_name", "plan_qty"]
-    if not all(k in payload for k in required):
-        return jsonify({"error": "Missing required fields"}), 400
+    required = ["product_name", "plan_qty", "material_name", "employee_id"]
+    if not all(payload.get(k) for k in required):
+        return jsonify({"error": "Missing required fields: product_name, plan_qty, material_name, employee_id"}), 400
 
     with SessionLocal() as session:
         # only manager with matching employee_id can create work order
@@ -409,12 +413,16 @@ def create_work_order():
         if err:
             return err
 
+        material = session.scalars(select(Material).where(Material.name == payload["material_name"])).first()
+        if not material:
+            return jsonify({"error": "Material not found for given name"}), 404
+
         code = payload.get("code") or f"WO-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
         token = new_token()
         wo = WorkOrder(
             code=code,
             product_name=payload["product_name"],
-            material_batch=payload.get("material_batch"),
+            material_batch=material.name,
             plan_qty=int(payload.get("plan_qty", 0)),
             line=payload.get("line"),
             status=payload.get("status", "待执行"),
@@ -472,6 +480,18 @@ def add_work_order_progress(work_order_id: int):
                 return err
 
         operator_id = operator.id if operator else None
+
+        # 物料扣减：按本次上报的实际产量扣除关联物料库存
+        delta_qty = int(payload.get("actual_qty", 0) or 0)
+        material_obj = None
+        if wo.material_batch:
+            material_obj = session.scalars(select(Material).where(Material.name == wo.material_batch)).first()
+            if not material_obj:
+                return jsonify({"error": f"Linked material '{wo.material_batch}' not found"}), 404
+            if delta_qty > 0:
+                if (material_obj.stock_qty or 0) < delta_qty:
+                    return jsonify({"error": "Insufficient material stock"}), 400
+                material_obj.stock_qty = (material_obj.stock_qty or 0) - delta_qty
 
         prog = WorkOrderProgress(
             work_order_id=work_order_id,
