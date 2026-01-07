@@ -587,9 +587,10 @@ def create_inspection():
         return jsonify({"error": "object_type must be material or product"}), 400
 
     with SessionLocal() as session:
-        _, err = require_personnel(session, "qa", payload.get("employee_id"))
+        qa_person, err = require_personnel(session, "qa", payload.get("employee_id"))
         if err:
             return err
+        inspector_name = qa_person.name if qa_person else payload.get("inspector")
         if object_type == "material":
             material = None
             qr_image = None
@@ -632,7 +633,7 @@ def create_inspection():
                 object_type="material",
                 object_token=material.qr_token,
                 result=result,
-                inspector=payload.get("inspector"),
+                inspector=inspector_name,
                 items=payload.get("items"),
                 note=payload.get("note"),
             )
@@ -685,7 +686,7 @@ def create_inspection():
             object_type="product",
             object_token=product.qr_token,
             result=result,
-            inspector=payload.get("inspector"),
+            inspector=inspector_name,
             items=payload.get("items"),
             note=payload.get("note"),
         )
@@ -725,7 +726,12 @@ def trace_product(qr_token: str):
 
         materials = []
         if work_order and work_order.material_batch:
-            materials = session.scalars(select(Material).where(Material.batch_code == work_order.material_batch)).all()
+            # work_order.material_batch currently stores material name; also match batch_code for backward compatibility
+            materials = session.scalars(
+                select(Material).where(
+                    (Material.name == work_order.material_batch) | (Material.batch_code == work_order.material_batch)
+                )
+            ).all()
 
         material_inspections = []
         if materials:

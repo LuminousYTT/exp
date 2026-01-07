@@ -4,7 +4,7 @@
 <head>
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<title>MES 一线操作门户</title>
+	<title>加工MES系统 - 一线操作门户</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
@@ -140,13 +140,13 @@
 			<div class="pill">扫码领单 / 进度回报</div>
 		</div>
 		<a class="pill" href="index.html">返回总览</a>
-	</header>
-	<main>
-		<div class="grid">
-			<div class="card">
-				<h2>扫码接单</h2>
-				<div id="qr-reader"></div>
-				<pre class="list" id="scan-result">等待扫码...</pre>
+		<header>
+			<div>
+				<h1>加工MES系统 · 一线操作门户</h1>
+				<div class="pill">扫描工单 / 上报进度</div>
+			</div>
+			<div id="qr-reader"></div>
+			<pre class="list" id="scan-result">等待扫码...</pre>
 			</div>
 
 			<div class="card">
@@ -161,80 +161,80 @@
 				</form>
 				<div class="list" id="completion-qr" style="text-align:center;">达成计划产量后自动生成完工二维码</div>
 			</div>
-		</div>
-	</main>
+			</div>
+			</main>
 
-	<script>
-		const API_BASE = "http://localhost:5000/api";
-		const QR_KEY_COMPLETION = "qr_completion_last";
+			<script>
+				const API_BASE = "http://localhost:5000/api";
+				const QR_KEY_COMPLETION = "qr_completion_last";
 
-		async function postJSON(url, data) {
-			const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-			if (!resp.ok) throw new Error(await resp.text());
-			return resp.json();
-		}
-
-		function restoreQr() {
-			const cached = localStorage.getItem(QR_KEY_COMPLETION);
-			if (cached) {
-				document.getElementById("completion-qr").innerHTML = cached;
-			}
-		}
-
-		function startScanner() {
-			const qrRegion = document.getElementById("qr-reader");
-			if (!window.Html5Qrcode) return;
-			const scanner = new Html5Qrcode("qr-reader");
-			const config = { fps: 10, qrbox: 220 };
-			scanner.start({ facingMode: "environment" }, config, async (decodedText) => {
-				try {
-					const resp = await fetch(`${API_BASE}/scan/${decodedText}`);
-					const data = await resp.json();
-					document.getElementById("scan-result").textContent = JSON.stringify(data, null, 2);
-					if (data.type === "work_order" && data.data?.id) {
-						document.querySelector("#progress-form input[name='work_order_id']").value = data.data.id;
-					}
-					if (data.type === "personnel" && data.data?.employee_id) {
-						document.querySelector("#progress-form input[name='employee_id']").value = data.data.employee_id;
-					}
-				} catch (err) {
-					document.getElementById("scan-result").textContent = `查询失败: ${err}`;
+				async function postJSON(url, data) {
+					const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+					if (!resp.ok) throw new Error(await resp.text());
+					return resp.json();
 				}
-			}, () => { }).catch(err => {
-				qrRegion.innerHTML = `<div class="pill">摄像头不可用: ${err}</div>`;
-			});
-		}
 
-		function setupForms() {
-			document.getElementById("progress-form").addEventListener("submit", async (e) => {
-				e.preventDefault();
-				const data = Object.fromEntries(new FormData(e.target).entries());
-				const id = data.work_order_id;
-				data.actual_qty = Number(data.actual_qty || 0);
-				data.defect_qty = Number(data.defect_qty || 0);
-				data.role = "operator";
-				const res = await postJSON(`${API_BASE}/workorders/${id}/progress`, data);
-				alert("提交成功");
-				const token = res.work_order?.completion_qr_token;
-				const box = document.getElementById("completion-qr");
-				if (token) {
-					const url = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(token)}`;
-					const html = `<div>完工二维码</div><img src="${url}" alt="完工二维码" style="max-width:180px;" /><div style="font-size:12px;color:#94a3b8;">Token: ${token}</div>`;
-					box.innerHTML = html;
-					localStorage.setItem(QR_KEY_COMPLETION, html);
-					box.scrollIntoView({ behavior: "smooth" });
-				} else {
-					box.innerHTML = "达成计划产量后自动生成完工二维码";
+				function restoreQr() {
+					const cached = localStorage.getItem(QR_KEY_COMPLETION);
+					if (cached) {
+						document.getElementById("completion-qr").innerHTML = cached;
+					}
 				}
-			});
-		}
 
-		window.addEventListener("DOMContentLoaded", () => {
-			setupForms();
-			startScanner();
-			restoreQr();
-		});
-	</script>
+				function startScanner() {
+					const qrRegion = document.getElementById("qr-reader");
+					if (!window.Html5Qrcode) return;
+					const scanner = new Html5Qrcode("qr-reader");
+					const config = { fps: 10, qrbox: 220 };
+					scanner.start({ facingMode: "environment" }, config, async (decodedText) => {
+						try {
+							const resp = await fetch(`${API_BASE}/scan/${decodedText}`);
+							const data = await resp.json();
+							document.getElementById("scan-result").textContent = JSON.stringify(data, null, 2);
+							if (data.type === "work_order" && data.data?.id) {
+								document.querySelector("#progress-form input[name='work_order_id']").value = data.data.id;
+							}
+							if (data.type === "personnel" && data.data?.employee_id) {
+								document.querySelector("#progress-form input[name='employee_id']").value = data.data.employee_id;
+							}
+						} catch (err) {
+							document.getElementById("scan-result").textContent = `查询失败: ${err}`;
+						}
+					}, () => { }).catch(err => {
+						qrRegion.innerHTML = `<div class="pill">摄像头不可用: ${err}</div>`;
+					});
+				}
+
+				function setupForms() {
+					document.getElementById("progress-form").addEventListener("submit", async (e) => {
+						e.preventDefault();
+						const data = Object.fromEntries(new FormData(e.target).entries());
+						const id = data.work_order_id;
+						data.actual_qty = Number(data.actual_qty || 0);
+						data.defect_qty = Number(data.defect_qty || 0);
+						data.role = "operator";
+						const res = await postJSON(`${API_BASE}/workorders/${id}/progress`, data);
+						alert("提交成功");
+						const token = res.work_order?.completion_qr_token;
+						const box = document.getElementById("completion-qr");
+						if (token) {
+							const url = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(token)}`;
+							const html = `<div>完工二维码</div><img src="${url}" alt="完工二维码" style="max-width:180px;" /><div style="font-size:12px;color:#94a3b8;">Token: ${token}</div>`;
+							box.innerHTML = html;
+							localStorage.setItem(QR_KEY_COMPLETION, html);
+							box.scrollIntoView({ behavior: "smooth" });
+						} else {
+							box.innerHTML = "达成计划产量后自动生成完工二维码";
+						}
+					});
+				}
+
+				window.addEventListener("DOMContentLoaded", () => {
+					setupForms();
+					startScanner();
+					restoreQr();
+				});
+			</script>
 </body>
 
 </html>

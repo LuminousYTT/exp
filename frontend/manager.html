@@ -4,7 +4,7 @@
 <head>
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<title>MES 生产管理门户</title>
+	<title>加工MES系统 - 生产管理门户</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
@@ -175,24 +175,24 @@
 			<div class="pill">工单创建 / 进度监控 / 异常</div>
 		</div>
 		<a class="pill" href="index.html">返回总览</a>
-	</header>
-	<main>
-		<div class="grid">
-			<div class="card">
-				<h2>工单创建 / 下发</h2>
-				<form id="workorder-form">
-					<label>管理员工号</label><input name="employee_id" required />
-					<label>产品名称</label><input name="product_name" required />
-					<label>物料名称（从现有物料选择）</label>
-					<select name="material_name" id="material-select" required></select>
-					<label>计划产量</label><input name="plan_qty" type="number" min="0" required />
-					<label>产线/工位</label><input name="line" />
-					<label>计划开工</label><input name="planned_start" placeholder="2026-01-07 08:00" />
-					<label>计划完工</label><input name="planned_end" placeholder="2026-01-07 20:00" />
-					<label>备注</label><textarea name="notes"></textarea>
-					<button type="submit">生成工单二维码并下发</button>
-				</form>
-				<div class="qr-img empty" id="workorder-qr">等待生成</div>
+		<header>
+			<div>
+				<h1>加工MES系统 · 生产管理门户</h1>
+				<div class="pill">开工单 / 进度 / 异常 / 物料</div>
+			</div>
+			<form id="workorder-form">
+				<label>管理员工号</label><input name="employee_id" required />
+				<label>产品名称</label><input name="product_name" required />
+				<label>物料名称（从现有物料选择）</label>
+				<select name="material_name" id="material-select" required></select>
+				<label>计划产量</label><input name="plan_qty" type="number" min="0" required />
+				<label>产线/工位</label><input name="line" />
+				<label>计划开工</label><input name="planned_start" placeholder="2026-01-07 08:00" />
+				<label>计划完工</label><input name="planned_end" placeholder="2026-01-07 20:00" />
+				<label>备注</label><textarea name="notes"></textarea>
+				<button type="submit">生成工单二维码并下发</button>
+			</form>
+			<div class="qr-img empty" id="workorder-qr">等待生成</div>
 			</div>
 
 			<div class="card">
@@ -211,109 +211,109 @@
 					<button type="submit">提交异常</button>
 				</form>
 			</div>
-		</div>
-	</main>
+			</div>
+			</main>
 
-	<script>
-		const API_BASE = "http://localhost:5000/api";
-		const QR_KEY_WORKORDER = "qr_workorder_last";
-		let materialsCache = [];
+			<script>
+				const API_BASE = "http://localhost:5000/api";
+				const QR_KEY_WORKORDER = "qr_workorder_last";
+				let materialsCache = [];
 
-		async function postJSON(url, data) {
-			const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-			if (!resp.ok) throw new Error(await resp.text());
-			return resp.json();
-		}
-
-		function renderList(id, items, mapper) {
-			const box = document.getElementById(id);
-			box.innerHTML = items.map(mapper).join("");
-		}
-
-		async function refreshAll() {
-			const workorders = await fetch(`${API_BASE}/workorders`).then(r => r.json());
-			renderList("workorder-list", workorders, w => `<div class="row"><div>${w.code} · ${w.product_name}</div><div class="badge">${w.status} / ${w.actual_qty || 0}/${w.plan_qty}</div></div>`);
-		}
-
-		async function loadMaterials() {
-			materialsCache = await fetch(`${API_BASE}/materials`).then(r => r.json());
-			const sel = document.getElementById("material-select");
-			sel.innerHTML = "";
-			if (!materialsCache.length) {
-				sel.innerHTML = `<option value="">暂无物料，请先在质检页创建</option>`;
-				return;
-			}
-			materialsCache.forEach(m => {
-				const opt = document.createElement("option");
-				opt.value = m.name;
-				opt.textContent = `${m.name} · 批次:${m.batch_code} · 库存:${m.stock_qty}`;
-				sel.appendChild(opt);
-			});
-		}
-
-		function restoreQr() {
-			const cached = localStorage.getItem(QR_KEY_WORKORDER);
-			if (cached) {
-				const box = document.getElementById("workorder-qr");
-				box.classList.remove("empty");
-				box.innerHTML = cached;
-			}
-		}
-
-		function setupForms() {
-			document.getElementById("workorder-form").addEventListener("submit", async (e) => {
-				e.preventDefault();
-				const data = Object.fromEntries(new FormData(e.target).entries());
-				data.plan_qty = Number(data.plan_qty || 0);
-				data.role = "manager";
-				if (!data.material_name) {
-					alert("请选择物料名称");
-					return;
+				async function postJSON(url, data) {
+					const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+					if (!resp.ok) throw new Error(await resp.text());
+					return resp.json();
 				}
-				try {
-					const res = await postJSON(`${API_BASE}/workorders`, data);
-					const box = document.getElementById("workorder-qr");
-					box.classList.remove("empty");
-					const html = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="二维码" />`;
-					box.innerHTML = html;
-					localStorage.setItem(QR_KEY_WORKORDER, html);
-				} catch (err) {
-					alert(`创建失败: ${err}`);
-					return;
+
+				function renderList(id, items, mapper) {
+					const box = document.getElementById(id);
+					box.innerHTML = items.map(mapper).join("");
 				}
-				try {
+
+				async function refreshAll() {
+					const workorders = await fetch(`${API_BASE}/workorders`).then(r => r.json());
+					renderList("workorder-list", workorders, w => `<div class="row"><div>${w.code} · ${w.product_name}</div><div class="badge">${w.status} / ${w.actual_qty || 0}/${w.plan_qty}</div></div>`);
+				}
+
+				async function loadMaterials() {
+					materialsCache = await fetch(`${API_BASE}/materials`).then(r => r.json());
+					const sel = document.getElementById("material-select");
+					sel.innerHTML = "";
+					if (!materialsCache.length) {
+						sel.innerHTML = `<option value="">暂无物料，请先在质检页创建</option>`;
+						return;
+					}
+					materialsCache.forEach(m => {
+						const opt = document.createElement("option");
+						opt.value = m.name;
+						opt.textContent = `${m.name} · 批次:${m.batch_code} · 库存:${m.stock_qty}`;
+						sel.appendChild(opt);
+					});
+				}
+
+				function restoreQr() {
+					const cached = localStorage.getItem(QR_KEY_WORKORDER);
+					if (cached) {
+						const box = document.getElementById("workorder-qr");
+						box.classList.remove("empty");
+						box.innerHTML = cached;
+					}
+				}
+
+				function setupForms() {
+					document.getElementById("workorder-form").addEventListener("submit", async (e) => {
+						e.preventDefault();
+						const data = Object.fromEntries(new FormData(e.target).entries());
+						data.plan_qty = Number(data.plan_qty || 0);
+						data.role = "manager";
+						if (!data.material_name) {
+							alert("请选择物料名称");
+							return;
+						}
+						try {
+							const res = await postJSON(`${API_BASE}/workorders`, data);
+							const box = document.getElementById("workorder-qr");
+							box.classList.remove("empty");
+							const html = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="二维码" />`;
+							box.innerHTML = html;
+							localStorage.setItem(QR_KEY_WORKORDER, html);
+						} catch (err) {
+							alert(`创建失败: ${err}`);
+							return;
+						}
+						try {
+							await refreshAll();
+						} catch (refreshErr) {
+							console.warn("刷新工单列表失败", refreshErr);
+						}
+					});
+
+					document.getElementById("exception-form").addEventListener("submit", async (e) => {
+						e.preventDefault();
+						const data = Object.fromEntries(new FormData(e.target).entries());
+						const id = data.work_order_id;
+						data.role = "manager";
+						try {
+							await postJSON(`${API_BASE}/workorders/${id}/exceptions`, data);
+						} catch (err) {
+							alert(`提交失败: ${err}`);
+							return;
+						}
+						try {
+							await refreshAll();
+						} catch (refreshErr) {
+							console.warn("刷新工单列表失败", refreshErr);
+						}
+					});
+				}
+
+				window.addEventListener("DOMContentLoaded", async () => {
+					setupForms();
+					restoreQr();
+					await loadMaterials();
 					await refreshAll();
-				} catch (refreshErr) {
-					console.warn("刷新工单列表失败", refreshErr);
-				}
-			});
-
-			document.getElementById("exception-form").addEventListener("submit", async (e) => {
-				e.preventDefault();
-				const data = Object.fromEntries(new FormData(e.target).entries());
-				const id = data.work_order_id;
-				data.role = "manager";
-				try {
-					await postJSON(`${API_BASE}/workorders/${id}/exceptions`, data);
-				} catch (err) {
-					alert(`提交失败: ${err}`);
-					return;
-				}
-				try {
-					await refreshAll();
-				} catch (refreshErr) {
-					console.warn("刷新工单列表失败", refreshErr);
-				}
-			});
-		}
-
-		window.addEventListener("DOMContentLoaded", async () => {
-			setupForms();
-			restoreQr();
-			await loadMaterials();
-			await refreshAll();
-		});
-	</script>
+				});
+			</script>
 </body>
 
 </html>
