@@ -175,7 +175,6 @@
 					<button type="submit">提交质检并入库</button>
 				</form>
 				<div class="list" id="material-qr" style="text-align:center;">物料二维码将在提交后生成</div>
-				<div class="list" id="inspection-list"></div>
 			</div>
 
 			<div class="card">
@@ -215,16 +214,6 @@
 			const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
 			if (!resp.ok) throw new Error(await resp.text());
 			return resp.json();
-		}
-
-		function renderList(id, items, mapper) {
-			const box = document.getElementById(id);
-			box.innerHTML = items.map(mapper).join("");
-		}
-
-		async function refreshAll() {
-			const inspections = await fetch(`${API_BASE}/inspections`).then(r => r.json());
-			renderList("inspection-list", inspections, i => `<div class=\"row\"><div>${i.object_type} · ${i.result}</div><div class=\"pill\">${i.inspector || ""}</div></div>`);
 		}
 
 		function restoreQr() {
@@ -274,13 +263,13 @@
 					const res = await postJSON(`${API_BASE}/inspections`, data);
 					alert("物料质检/入库已提交");
 					if (res.qr_image_base64) {
-						const html = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="物料码" style="max-width:140px;" />`;
+						const html = `<img src=\"data:image/png;base64,${res.qr_image_base64}\" alt=\"物料码\" style=\"max-width:140px;\" />`;
 						document.getElementById("material-qr").innerHTML = html;
 						localStorage.setItem(QR_KEY_MATERIAL, html);
 					}
-					await refreshAll();
 				} catch (err) {
 					alert(`提交失败: ${err}`);
+					return;
 				}
 			});
 
@@ -295,16 +284,16 @@
 					const res = await postJSON(`${API_BASE}/inspections`, data);
 					alert("成品质检/入库已提交");
 					if (res.qr_image_base64) {
-						const html = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="成品码" style="max-width:140px;" />`;
+						const html = `<img src=\"data:image/png;base64,${res.qr_image_base64}\" alt=\"成品码\" style=\"max-width:140px;\" />`;
 						document.getElementById("product-qr").innerHTML = html;
 						localStorage.setItem(QR_KEY_PRODUCT, html);
 					}
 					if (res.product?.qr_token) {
 						document.getElementById("trace-token").value = res.product.qr_token;
 					}
-					await refreshAll();
 				} catch (err) {
 					alert(`提交失败: ${err}`);
+					return;
 				}
 			});
 
@@ -329,7 +318,6 @@
 			setupForms();
 			startScanner();
 			restoreQr();
-			await refreshAll();
 		});
 	</script>
 </body>

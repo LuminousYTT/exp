@@ -277,9 +277,14 @@
 					const html = `<img src="data:image/png;base64,${res.qr_image_base64}" alt="二维码" />`;
 					box.innerHTML = html;
 					localStorage.setItem(QR_KEY_WORKORDER, html);
-					await refreshAll();
 				} catch (err) {
 					alert(`创建失败: ${err}`);
+					return;
+				}
+				try {
+					await refreshAll();
+				} catch (refreshErr) {
+					console.warn("刷新工单列表失败", refreshErr);
 				}
 			});
 
@@ -290,9 +295,14 @@
 				data.role = "manager";
 				try {
 					await postJSON(`${API_BASE}/workorders/${id}/exceptions`, data);
-					await refreshAll();
 				} catch (err) {
 					alert(`提交失败: ${err}`);
+					return;
+				}
+				try {
+					await refreshAll();
+				} catch (refreshErr) {
+					console.warn("刷新工单列表失败", refreshErr);
 				}
 			});
 		}

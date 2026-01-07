@@ -213,9 +213,14 @@
 						document.getElementById("personnel-qr").innerHTML = html;
 						localStorage.setItem(QR_KEY_PERSONNEL, html);
 					}
-					await refreshAll();
 				} catch (err) {
 					alert(`创建失败: ${err}`);
+					return;
+				}
+				try {
+					await refreshAll();
+				} catch (refreshErr) {
+					console.warn("刷新人员列表失败", refreshErr);
 				}
 			});
 		}
