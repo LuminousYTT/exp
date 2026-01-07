@@ -251,6 +251,82 @@
 			});
 		}
 
+		function renderTrace(data) {
+			const lines = [];
+			const product = data?.product;
+			const work = data?.work_order;
+			const materials = data?.materials || [];
+			const matInspections = data?.material_inspections || [];
+			const prodInspections = data?.product_inspections || [];
+			const operators = data?.operators || [];
+
+			if (product) {
+				lines.push("【成品】");
+				if (product.name) lines.push(`名称: ${product.name}`);
+				if (product.status) lines.push(`状态: ${product.status}`);
+				if (product.final_inspection) lines.push(`最终检验: ${product.final_inspection}`);
+				if (product.created_at) lines.push(`建档时间: ${product.created_at}`);
+			}
+
+			if (work) {
+				lines.push("\n【工单】");
+				if (work.code) lines.push(`工单编码: ${work.code}`);
+				if (work.product_name) lines.push(`产品: ${work.product_name}`);
+				if (work.material_batch) lines.push(`关联物料: ${work.material_batch}`);
+				if (work.plan_qty) lines.push(`计划数量: ${work.plan_qty}`);
+				if (work.status) lines.push(`状态: ${work.status}`);
+			}
+
+			if (materials.length) {
+				lines.push("\n【物料】");
+				materials.forEach(m => {
+					const parts = [];
+					if (m.name) parts.push(m.name);
+					if (m.batch_code) parts.push(`批次:${m.batch_code}`);
+					if (m.supplier) parts.push(`供应商:${m.supplier}`);
+					if (m.inspection_result) parts.push(`检验:${m.inspection_result}`);
+					if (parts.length) lines.push(parts.join(" · "));
+				});
+			}
+
+			if (matInspections.length) {
+				lines.push("\n【物料检验】");
+				matInspections.forEach(i => {
+					const parts = [];
+					if (i.result) parts.push(`结果:${i.result}`);
+					if (i.inspector) parts.push(`检验员:${i.inspector}`);
+					if (i.note) parts.push(`备注:${i.note}`);
+					if (i.created_at) parts.push(`时间:${i.created_at}`);
+					if (parts.length) lines.push(parts.join(" · "));
+				});
+			}
+
+			if (prodInspections.length) {
+				lines.push("\n【成品检验】");
+				prodInspections.forEach(i => {
+					const parts = [];
+					if (i.result) parts.push(`结果:${i.result}`);
+					if (i.inspector) parts.push(`检验员:${i.inspector}`);
+					if (i.note) parts.push(`备注:${i.note}`);
+					if (i.created_at) parts.push(`时间:${i.created_at}`);
+					if (parts.length) lines.push(parts.join(" · "));
+				});
+			}
+
+			if (operators.length) {
+				lines.push("\n【操作人员】");
+				operators.forEach(o => {
+					const parts = [];
+					if (o.name) parts.push(o.name);
+					if (o.employee_id) parts.push(`工号:${o.employee_id}`);
+					if (o.role) parts.push(`角色:${o.role}`);
+					if (parts.length) lines.push(parts.join(" · "));
+				});
+			}
+
+			document.getElementById("trace-result").textContent = lines.length ? lines.join("\n") : "无可用追溯信息";
+		}
+
 		function setupForms() {
 			document.getElementById("material-inspection-form").addEventListener("submit", async (e) => {
 				e.preventDefault();
@@ -307,7 +383,7 @@
 					const res = await fetch(`${API_BASE}/trace/product/${token}`);
 					const data = await res.json();
 					if (!res.ok) throw new Error(data.error || "查询失败");
-					document.getElementById("trace-result").textContent = JSON.stringify(data, null, 2);
+					renderTrace(data);
 				} catch (err) {
 					document.getElementById("trace-result").textContent = `查询失败: ${err}`;
 				}
