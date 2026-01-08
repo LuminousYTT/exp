@@ -305,6 +305,10 @@
 						document.querySelector("#material-inspection-form input[name='material_id']").value = data.data.id;
 						document.getElementById("trace-token").value = data.data?.qr_token || "";
 					}
+					if (data.type === "semi_product" && data.data?.qr_token) {
+						document.getElementById("target-token").value = data.data.qr_token;
+						document.getElementById("trace-token").value = data.data.qr_token;
+					}
 					if (data.type === "work_order_completion" && data.data?.completion_qr_token) {
 						document.getElementById("target-token").value = data.data.completion_qr_token;
 						document.getElementById("trace-token").value = data.data.completion_qr_token;

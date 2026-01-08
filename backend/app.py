@@ -608,6 +608,7 @@ def process_steps():
                 parent_token=material.qr_token,
                 qr_token=new_token(),
                 work_order_id=wo.id,
+                operator_id=operator.id if operator else None,
             )
             session.add(semi)
             session.flush()
@@ -632,6 +633,7 @@ def process_steps():
                 parent_token=juice.qr_token,
                 qr_token=new_token(),
                 work_order_id=wo.id,
+                operator_id=operator.id if operator else None,
             )
             session.add(semi)
             session.flush()
