@@ -310,6 +310,8 @@
 					document.getElementById("scan-result").textContent = JSON.stringify(data, null, 2);
 					if (data.type === "material" && data.data?.id) {
 						document.querySelector("#material-inspection-form input[name='material_id']").value = data.data.id;
+						document.getElementById("trace-token").value = data.data?.qr_token || "";
+						traceTarget = "material";
 					}
 					if (data.type === "work_order_completion" && data.data?.completion_qr_token) {
 						document.getElementById("target-token").value = data.data.completion_qr_token;
@@ -319,6 +321,8 @@
 					}
 					if (data.type === "product" && data.data?.qr_token) {
 						document.getElementById("trace-token").value = data.data.qr_token;
+						document.getElementById("target-token").value = data.data.qr_token;
+						inspectionTarget.value = "product";
 						traceTarget = "product";
 					}
 					if (data.type === "semi_product" && data.data?.qr_token) {
@@ -506,7 +510,7 @@
 					return;
 				}
 				try {
-					const path = traceTarget === "semi" ? `/trace/semi/${token}` : `/trace/product/${token}`;
+					const path = traceTarget === "semi" ? `/trace/semi/${token}` : traceTarget === "material" ? `/trace/material/${token}` : `/trace/product/${token}`;
 					const res = await fetch(`${API_BASE}${path}`);
 					const data = await res.json();
 					if (!res.ok) throw new Error(data.error || "查询失败");

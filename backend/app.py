@@ -866,6 +866,7 @@ def create_inspection():
                     "inspection": inspection_to_dict(record),
                     "inventory_move": product_move_to_dict(move),
                     "product": product_to_dict(existing_product),
+                    "qr_image_base64": generate_qr_base64(existing_product.qr_token, category="products", filename=f"product_{existing_product.id}.png"),
                 }
             )
 
@@ -1136,6 +1137,35 @@ def trace_semi(qr_token: str):
                 ],
                 "products": [product_to_dict(p) for p in products],
                 "work_order": work_order_to_dict(work_order) if work_order else None,
+            }
+        )
+
+
+@app.get("/api/trace/material/<string:qr_token>")
+def trace_material(qr_token: str):
+    with SessionLocal() as session:
+        material = session.scalars(select(Material).where(Material.qr_token == qr_token)).first()
+        if not material:
+            return jsonify({"error": "Material not found for token"}), 404
+
+        inspections = session.scalars(
+            select(InspectionRecord)
+            .where(InspectionRecord.object_type == "material", InspectionRecord.object_token == material.qr_token)
+            .order_by(InspectionRecord.created_at.desc())
+        ).all()
+
+        return jsonify(
+            {
+                "material": material_to_dict(material),
+                "material_inspections": [
+                    {
+                        "result": i.result,
+                        "inspector": i.inspector,
+                        "note": i.note,
+                        "created_at": format_ts(i.created_at),
+                    }
+                    for i in inspections
+                ],
             }
         )
 
