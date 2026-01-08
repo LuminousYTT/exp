@@ -639,7 +639,7 @@ def process_steps():
 
         product = Product(
             name=wo.product_name,
-            status="WIP",
+            status="待质检",
             final_inspection=None,
             linked_materials=wo.material_batch,
             process_data=wo.code,
@@ -648,10 +648,41 @@ def process_steps():
         )
         session.add(product)
         session.flush()
+
+        # 将装瓶数量计入工单完成量
+        prog = WorkOrderProgress(
+            work_order_id=wo.id,
+            actual_qty=qty,
+            defect_qty=0,
+            operator_id=operator.id if operator else None,
+            note=payload.get("note"),
+        )
+        session.add(prog)
+        session.flush()
+
+        total_actual = session.execute(
+            select(func.coalesce(func.sum(WorkOrderProgress.actual_qty), 0)).where(WorkOrderProgress.work_order_id == work_order_id)
+        ).scalar_one()
+
+        if wo.status == "待执行":
+            wo.status = "执行中"
+        if wo.plan_qty and int(total_actual or 0) >= wo.plan_qty:
+            wo.status = "完成"
+            if not wo.completion_qr_token:
+                wo.completion_qr_token = new_token()
+                generate_qr_base64(wo.completion_qr_token, category="work_order_completion", filename=f"wo_{wo.id}_completion.png")
+
         qr_image = generate_qr_base64(product.qr_token, category="products", filename=f"product_{product.id}.png")
         session.commit()
         session.refresh(product)
-        return jsonify({"product": product_to_dict(product), "qr_image_base64": qr_image})
+        session.refresh(wo)
+        session.refresh(prog)
+        return jsonify({
+            "product": product_to_dict(product),
+            "qr_image_base64": qr_image,
+            "work_order": work_order_to_dict(wo),
+            "progress": progress_to_dict(prog),
+        })
 
 
 @app.post("/api/workorders/<int:work_order_id>/exceptions")
@@ -1020,6 +1051,91 @@ def trace_product(qr_token: str):
                     }
                     for p in operators
                 ],
+            }
+        )
+
+
+@app.get("/api/trace/semi/<string:qr_token>")
+def trace_semi(qr_token: str):
+    with SessionLocal() as session:
+        semi = session.scalars(select(SemiProduct).where(SemiProduct.qr_token == qr_token)).first()
+        if not semi:
+            return jsonify({"error": "Semi-product not found for token"}), 404
+
+        # upstream chain
+        semi_chain = [semi_product_to_dict(semi)]
+        semi_tokens = [semi.qr_token]
+        current_token = semi.parent_token
+        last_parent = None
+        while current_token:
+            sp = session.scalars(select(SemiProduct).where(SemiProduct.qr_token == current_token)).first()
+            if not sp:
+                last_parent = current_token
+                break
+            semi_chain.append(semi_product_to_dict(sp))
+            semi_tokens.append(sp.qr_token)
+            last_parent = sp.parent_token
+            current_token = sp.parent_token
+
+        materials = []
+        if last_parent:
+            mat_extra = session.scalars(select(Material).where(Material.qr_token == last_parent)).first()
+            if mat_extra:
+                materials.append(mat_extra)
+
+        material_inspections = []
+        if materials:
+            material_tokens = [m.qr_token for m in materials]
+            material_inspections = session.scalars(
+                select(InspectionRecord)
+                .where(InspectionRecord.object_type == "material", InspectionRecord.object_token.in_(material_tokens))
+                .order_by(InspectionRecord.created_at.desc())
+            ).all()
+
+        semi_inspections = session.scalars(
+            select(InspectionRecord)
+            .where(InspectionRecord.object_token.in_(semi_tokens))
+            .order_by(InspectionRecord.created_at.desc())
+        ).all()
+
+        products = session.scalars(select(Product).where(Product.parent_token == qr_token)).all()
+        work_order = None
+        if semi.work_order_id:
+            work_order = session.get(WorkOrder, semi.work_order_id)
+
+        return jsonify(
+            {
+                "semi_products": semi_chain,
+                "semi_inspections": [
+                    {
+                        "object_token": i.object_token,
+                        "result": i.result,
+                        "inspector": i.inspector,
+                        "note": i.note,
+                        "created_at": format_ts(i.created_at),
+                    }
+                    for i in semi_inspections
+                ],
+                "materials": [
+                    {
+                        "name": m.name,
+                        "batch_code": m.batch_code,
+                        "supplier": m.supplier,
+                        "inspection_result": m.inspection_result,
+                    }
+                    for m in materials
+                ],
+                "material_inspections": [
+                    {
+                        "result": i.result,
+                        "inspector": i.inspector,
+                        "note": i.note,
+                        "created_at": format_ts(i.created_at),
+                    }
+                    for i in material_inspections
+                ],
+                "products": [product_to_dict(p) for p in products],
+                "work_order": work_order_to_dict(work_order) if work_order else None,
             }
         )
 

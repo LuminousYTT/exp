@@ -267,9 +267,9 @@
 			</div>
 
 			<div class="card module-card hidden" data-module="trace">
-				<h2>质量追溯（扫描成品二维码）</h2>
+				<h2>质量追溯（成品二维码）</h2>
 				<div class="row-col">
-					<div><label>成品二维码Token</label><input id="trace-token" placeholder="可扫码自动填入" /></div>
+					<div><label>二维码Token</label><input id="trace-token" placeholder="可扫码自动填入" /></div>
 					<div><button id="trace-btn" type="button">查询追溯</button></div>
 				</div>
 				<pre class="list" id="trace-result">等待扫描或查询...</pre>
@@ -283,6 +283,7 @@
 		const QR_KEY_PRODUCT = "qr_product_last";
 		const productInspectionForm = document.getElementById("product-inspection-form");
 		const inspectionTarget = document.getElementById("inspection-target");
+		let traceTarget = "product";
 
 		async function postJSON(url, data) {
 			const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
@@ -314,13 +315,17 @@
 						document.getElementById("target-token").value = data.data.completion_qr_token;
 						document.getElementById("trace-token").value = "";
 						inspectionTarget.value = "product";
+						traceTarget = "product";
 					}
 					if (data.type === "product" && data.data?.qr_token) {
 						document.getElementById("trace-token").value = data.data.qr_token;
+						traceTarget = "product";
 					}
 					if (data.type === "semi_product" && data.data?.qr_token) {
 						document.getElementById("target-token").value = data.data.qr_token;
 						inspectionTarget.value = "semi_product";
+						document.getElementById("trace-token").value = data.data.qr_token;
+						traceTarget = "semi";
 					}
 				} catch (err) {
 					document.getElementById("scan-result").textContent = `查询失败: ${err}`;
@@ -348,6 +353,18 @@
 				if (product.final_inspection) lines.push(`最终检验: ${product.final_inspection}`);
 				if (product.parent_token) lines.push(`上游Token: ${product.parent_token}`);
 				if (product.created_at) lines.push(`建档时间: ${product.created_at}`);
+			}
+
+			if (!product && semiProducts.length) {
+				lines.push("【当前半成品】");
+				const sp = semiProducts[0];
+				const parts = [];
+				if (sp.name) parts.push(sp.name);
+				if (sp.stage) parts.push(sp.stage === "juice" ? "榨汁" : sp.stage === "ferment" ? "酿造" : sp.stage);
+				if (sp.qr_token) parts.push(`Token:${sp.qr_token}`);
+				if (sp.parent_token) parts.push(`上游:${sp.parent_token}`);
+				if (sp.created_at) parts.push(`时间:${sp.created_at}`);
+				if (parts.length) lines.push(parts.join(" · "));
 			}
 
 			if (work) {
@@ -489,7 +506,8 @@
 					return;
 				}
 				try {
-					const res = await fetch(`${API_BASE}/trace/product/${token}`);
+					const path = traceTarget === "semi" ? `/trace/semi/${token}` : `/trace/product/${token}`;
+					const res = await fetch(`${API_BASE}${path}`);
 					const data = await res.json();
 					if (!res.ok) throw new Error(data.error || "查询失败");
 					renderTrace(data);
