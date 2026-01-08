@@ -245,16 +245,11 @@
 			</div>
 
 			<div class="card module-card hidden" data-module="product">
-				<h2>成品质检 / 半成品质检入库</h2>
+				<h2>成品质检入库</h2>
 				<form id="product-inspection-form">
 					<label>质检员工号</label><input name="employee_id" required />
-					<label>检验对象</label>
-					<select id="inspection-target" name="inspection_target">
-						<option value="product" selected>最终成品（工单完工二维码）</option>
-						<option value="semi_product">半成品（榨汁/酿造阶段二维码）</option>
-					</select>
 					<label>对象二维码Token</label>
-					<input name="target_token" id="target-token" placeholder="请扫码对应二维码自动填充" required />
+					<input name="target_token" id="target-token" placeholder="请扫码成品二维码自动填充" required />
 					<div class="row-col">
 						<div><label>数量</label><input name="qty" type="number" placeholder="入库数量" required /></div>
 						<div><label>库位</label><input name="location" placeholder="FG库位" /></div>
@@ -282,8 +277,6 @@
 		const QR_KEY_MATERIAL = "qr_material_last";
 		const QR_KEY_PRODUCT = "qr_product_last";
 		const productInspectionForm = document.getElementById("product-inspection-form");
-		const inspectionTarget = document.getElementById("inspection-target");
-		let traceTarget = "product";
 
 		async function postJSON(url, data) {
 			const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
@@ -311,25 +304,14 @@
 					if (data.type === "material" && data.data?.id) {
 						document.querySelector("#material-inspection-form input[name='material_id']").value = data.data.id;
 						document.getElementById("trace-token").value = data.data?.qr_token || "";
-						traceTarget = "material";
 					}
 					if (data.type === "work_order_completion" && data.data?.completion_qr_token) {
 						document.getElementById("target-token").value = data.data.completion_qr_token;
-						document.getElementById("trace-token").value = "";
-						inspectionTarget.value = "product";
-						traceTarget = "product";
+						document.getElementById("trace-token").value = data.data.completion_qr_token;
 					}
 					if (data.type === "product" && data.data?.qr_token) {
 						document.getElementById("trace-token").value = data.data.qr_token;
 						document.getElementById("target-token").value = data.data.qr_token;
-						inspectionTarget.value = "product";
-						traceTarget = "product";
-					}
-					if (data.type === "semi_product" && data.data?.qr_token) {
-						document.getElementById("target-token").value = data.data.qr_token;
-						inspectionTarget.value = "semi_product";
-						document.getElementById("trace-token").value = data.data.qr_token;
-						traceTarget = "semi";
 					}
 				} catch (err) {
 					document.getElementById("scan-result").textContent = `查询失败: ${err}`;
@@ -497,8 +479,7 @@
 				e.preventDefault();
 				const data = Object.fromEntries(new FormData(e.target).entries());
 				if (data.qty) data.qty = Number(data.qty);
-				const target = inspectionTarget.value;
-				data.object_type = target;
+				data.object_type = "product";
 				data.object_token = data.target_token;
 				data.role = "qa";
 				try {
@@ -525,8 +506,7 @@
 					return;
 				}
 				try {
-					const path = traceTarget === "semi" ? `/trace/semi/${token}` : traceTarget === "material" ? `/trace/material/${token}` : `/trace/product/${token}`;
-					const res = await fetch(`${API_BASE}${path}`);
+					const res = await fetch(`${API_BASE}/trace/product/${token}`);
 					const data = await res.json();
 					if (!res.ok) throw new Error(data.error || "查询失败");
 					renderTrace(data);

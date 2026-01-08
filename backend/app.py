@@ -1143,7 +1143,11 @@ def trace_product(qr_token: str):
             ).all()
 
         # operator info for semi chain
-        operator_ids = [sp.get("operator_id") for sp in semi_chain if isinstance(sp, dict) and sp.get("operator_id")]
+        operator_ids = []
+        for sp in semi_chain:
+            sp_dict = sp if isinstance(sp, dict) else semi_product_to_dict(sp)
+            if sp_dict.get("operator_id"):
+                operator_ids.append(sp_dict.get("operator_id"))
         operator_map = {}
         if operator_ids:
             ops = session.scalars(select(Personnel).where(Personnel.id.in_(operator_ids))).all()
@@ -1195,7 +1199,9 @@ def trace_product(qr_token: str):
                     for i in material_inspections
                 ],
                 "semi_products": [
-                    {**semi_product_to_dict(sp), "operator": operator_map.get(sp.get("operator_id")) if isinstance(sp, dict) else operator_map.get(sp.operator_id)}
+                    (
+                        lambda sp_dict: {**sp_dict, "operator": operator_map.get(sp_dict.get("operator_id"))}
+                    )(sp if isinstance(sp, dict) else semi_product_to_dict(sp))
                     for sp in semi_chain
                 ],
                 "semi_inspections": [
@@ -1265,7 +1271,12 @@ def trace_semi(qr_token: str):
 
         products = session.scalars(select(Product).where(Product.parent_token == qr_token)).all()
         # resolve operator details for semi chain
-        operator_ids = [sp.operator_id for sp in semi_chain if getattr(sp, "operator_id", None)]
+        operator_ids = []
+        for sp in semi_chain:
+            if isinstance(sp, dict) and sp.get("operator_id"):
+                operator_ids.append(sp.get("operator_id"))
+            elif getattr(sp, "operator_id", None):
+                operator_ids.append(sp.operator_id)
         operators = []
         if operator_ids:
             operators = session.scalars(select(Personnel).where(Personnel.id.in_(operator_ids))).all()
