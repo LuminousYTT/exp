@@ -7,6 +7,7 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from sqlalchemy import select, func
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.exceptions import HTTPException
 
 import config
 from db import Base, engine, SessionLocal
@@ -28,6 +29,15 @@ from models import (
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path="")
 CORS(app)
+
+
+@app.errorhandler(Exception)
+def handle_exception(err):
+    """Return JSON for all errors to avoid HTML bodies breaking frontend parsing."""
+    if isinstance(err, HTTPException):
+        return jsonify({"error": err.description}), err.code
+    app.logger.exception("Unhandled server error")
+    return jsonify({"error": "internal server error", "detail": str(err)}), 500
 
 # Initialize database schema if missing
 Base.metadata.create_all(bind=engine)
@@ -960,9 +970,121 @@ def list_inspections():
 
 @app.get("/api/trace/product/<string:qr_token>")
 def trace_product(qr_token: str):
+    qr_token = (qr_token or "").strip()
     with SessionLocal() as session:
         product = session.scalars(select(Product).where((Product.qr_token == qr_token) | (Product.inspection_qr_token == qr_token))).first()
         if not product:
+            # 容错：若传入的是半成品或物料码，转到对应追溯
+            semi = session.scalars(select(SemiProduct).where(SemiProduct.qr_token == qr_token)).first()
+            if semi:
+                # inline trace_semi logic (read-only)
+                semi_chain = [semi_product_to_dict(semi)]
+                semi_tokens = [semi.qr_token]
+                current_token = semi.parent_token
+                last_parent = None
+                while current_token:
+                    sp = session.scalars(select(SemiProduct).where(SemiProduct.qr_token == current_token)).first()
+                    if not sp:
+                        last_parent = current_token
+                        break
+                    semi_chain.append(semi_product_to_dict(sp))
+                    semi_tokens.append(sp.qr_token)
+                    last_parent = sp.parent_token
+                    current_token = sp.parent_token
+
+                materials = []
+                if last_parent:
+                    mat_extra = session.scalars(select(Material).where(Material.qr_token == last_parent)).first()
+                    if mat_extra:
+                        materials.append(mat_extra)
+
+                material_inspections = []
+                if materials:
+                    material_tokens = [m.qr_token for m in materials]
+                    material_inspections = session.scalars(
+                        select(InspectionRecord)
+                        .where(InspectionRecord.object_type == "material", InspectionRecord.object_token.in_(material_tokens))
+                        .order_by(InspectionRecord.created_at.desc())
+                    ).all()
+
+                semi_inspections = session.scalars(
+                    select(InspectionRecord)
+                    .where(InspectionRecord.object_token.in_(semi_tokens))
+                    .order_by(InspectionRecord.created_at.desc())
+                ).all()
+
+                products = session.scalars(select(Product).where(Product.parent_token == qr_token)).all()
+                work_order = None
+                if semi.work_order_id:
+                    work_order = session.get(WorkOrder, semi.work_order_id)
+
+                operator_ids = [sp.get("operator_id") for sp in semi_chain if isinstance(sp, dict) and sp.get("operator_id")]
+                operator_map = {}
+                if operator_ids:
+                    ops = session.scalars(select(Personnel).where(Personnel.id.in_(operator_ids))).all()
+                    operator_map = {o.id: personnel_to_dict(o) for o in ops}
+
+                return jsonify(
+                    {
+                        "semi_products": [
+                            {**sp, "operator": operator_map.get(sp.get("operator_id")) if isinstance(sp, dict) else None}
+                            for sp in semi_chain
+                        ],
+                        "semi_inspections": [
+                            {
+                                "object_token": i.object_token,
+                                "result": i.result,
+                                "inspector": i.inspector,
+                                "note": i.note,
+                                "created_at": format_ts(i.created_at),
+                            }
+                            for i in semi_inspections
+                        ],
+                        "materials": [
+                            {
+                                "name": m.name,
+                                "batch_code": m.batch_code,
+                                "supplier": m.supplier,
+                                "inspection_result": m.inspection_result,
+                            }
+                            for m in materials
+                        ],
+                        "material_inspections": [
+                            {
+                                "result": i.result,
+                                "inspector": i.inspector,
+                                "note": i.note,
+                                "created_at": format_ts(i.created_at),
+                            }
+                            for i in material_inspections
+                        ],
+                        "products": [product_to_dict(p) for p in products],
+                        "work_order": work_order_to_dict(work_order) if work_order else None,
+                    }
+                )
+
+            material = session.scalars(select(Material).where(Material.qr_token == qr_token)).first()
+            if material:
+                inspections = session.scalars(
+                    select(InspectionRecord)
+                    .where(InspectionRecord.object_type == "material", InspectionRecord.object_token == material.qr_token)
+                    .order_by(InspectionRecord.created_at.desc())
+                ).all()
+                return jsonify(
+                    {
+                        "material": material_to_dict(material),
+                        "material_inspections": [
+                            {
+                                "result": i.result,
+                                "inspector": i.inspector,
+                                "note": i.note,
+                                "created_at": format_ts(i.created_at),
+                            }
+                            for i in inspections
+                        ],
+                    }
+                )
+
             return jsonify({"error": "Product not found for token"}), 404
 
         work_order = None
