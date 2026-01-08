@@ -353,9 +353,11 @@
 			if (product) {
 				lines.push("【成品】");
 				if (product.name) lines.push(`名称: ${product.name}`);
+				if (product.qty !== undefined) lines.push(`数量: ${product.qty}`);
 				if (product.status) lines.push(`状态: ${product.status}`);
 				if (product.final_inspection) lines.push(`最终检验: ${product.final_inspection}`);
 				if (product.parent_token) lines.push(`上游Token: ${product.parent_token}`);
+				if (product.inspection_qr_token) lines.push(`质检码: ${product.inspection_qr_token}`);
 				if (product.created_at) lines.push(`建档时间: ${product.created_at}`);
 			}
 
@@ -424,6 +426,7 @@
 					if (sp.stock_qty !== undefined) parts.push(`余量:${sp.stock_qty}`);
 					if (sp.parent_token) parts.push(`上游:${sp.parent_token}`);
 					if (sp.qr_token) parts.push(`Token:${sp.qr_token}`);
+					if (sp.operator?.name || sp.operator?.employee_id) parts.push(`操作员:${sp.operator?.name || ''}${sp.operator?.employee_id ? '(' + sp.operator.employee_id + ')' : ''}`);
 					if (sp.created_at) parts.push(`时间:${sp.created_at}`);
 					if (parts.length) lines.push(parts.join(" · "));
 				});

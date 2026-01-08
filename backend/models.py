@@ -38,6 +38,8 @@ class Product(Base):
     linked_materials = Column(Text, nullable=True)
     process_data = Column(Text, nullable=True)
     parent_token = Column(String(64), nullable=True)
+    qty = Column(Integer, nullable=False, default=0)
+    inspection_qr_token = Column(String(64), unique=True, nullable=True)
     qr_token = Column(String(64), unique=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -158,6 +160,7 @@ class SemiProduct(Base):
     parent_token = Column(String(64), nullable=True)  # upstream material/semi/product token
     qr_token = Column(String(64), unique=True, nullable=False)
     work_order_id = Column(Integer, ForeignKey("work_orders.id"), nullable=True)
+    operator_id = Column(Integer, ForeignKey("personnel.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
