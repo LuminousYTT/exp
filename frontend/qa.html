@@ -343,6 +343,7 @@
 			const lines = [];
 			const product = data?.product;
 			const work = data?.work_order;
+			const materialSingle = data?.material;
 			const materials = data?.materials || [];
 			const matInspections = data?.material_inspections || [];
 			const prodInspections = data?.product_inspections || [];
@@ -366,9 +367,10 @@
 				const sp = semiProducts[0];
 				const parts = [];
 				if (sp.name) parts.push(sp.name);
-				if (sp.stage) parts.push(sp.stage === "juice" ? "榨汁" : sp.stage === "ferment" ? "酿造" : sp.stage);
+				if (sp.stage) parts.push(sp.stage === "juice" ? "榨汁" : sp.stage === "ferment" ? "酿造" : sp.stage === "bottle" ? "装瓶" : sp.stage);
 				if (sp.qr_token) parts.push(`Token:${sp.qr_token}`);
 				if (sp.parent_token) parts.push(`上游:${sp.parent_token}`);
+				if (sp.operator?.name || sp.operator?.employee_id) parts.push(`操作员:${sp.operator?.name || ''}${sp.operator?.employee_id ? '(' + sp.operator.employee_id + ')' : ''}`);
 				if (sp.created_at) parts.push(`时间:${sp.created_at}`);
 				if (parts.length) lines.push(parts.join(" · "));
 			}
@@ -380,6 +382,16 @@
 				if (work.material_batch) lines.push(`关联物料: ${work.material_batch}`);
 				if (work.plan_qty) lines.push(`计划数量: ${work.plan_qty}`);
 				if (work.status) lines.push(`状态: ${work.status}`);
+			}
+
+			if (materialSingle) {
+				lines.push("\n【物料】");
+				const parts = [];
+				if (materialSingle.name) parts.push(materialSingle.name);
+				if (materialSingle.batch_code) parts.push(`批次:${materialSingle.batch_code}`);
+				if (materialSingle.supplier) parts.push(`供应商:${materialSingle.supplier}`);
+				if (materialSingle.inspection_result) parts.push(`检验:${materialSingle.inspection_result}`);
+				if (parts.length) lines.push(parts.join(" · "));
 			}
 
 			if (materials.length) {
